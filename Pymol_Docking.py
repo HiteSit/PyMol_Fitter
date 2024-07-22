@@ -170,11 +170,39 @@ def on_site_docking(protein_selection, ligand_selection, mode, outname: str):
     Returns:
     None. The result of the docking or minimization is loaded into PyMOL.
     """
+
+    def assert_organic(selection):
+        """
+        Assert that the given PyMOL selection consists of only organic molecules.
+
+        Parameters:
+        - selection (str): The PyMOL selection string to check.
+
+        Raises:
+        - AssertionError: If the selection contains non-organic molecules.
+        """
+        # Create a temporary selection for organic molecules
+        cmd.select("organic_check", f"{selection} and organic")
+
+        # Get the total number of atoms in the original selection
+        total_atoms = cmd.count_atoms(selection)
+
+        # Get the number of atoms in the organic selection
+        organic_atoms = cmd.count_atoms("organic_check")
+
+        # Check if the number of organic atoms is equal to the total number of atoms
+        assert organic_atoms == total_atoms, "Selection contains non-organic molecules."
+        logger.info(f"Selection {selection} contains only organic molecules.")
+
+        # Delete the temporary selection
+        cmd.delete("organic_check")
+
     # Assert the mode
     assert mode in ["Minimize", "Dock"]
 
     protein_name = cmd.get_object_list(protein_selection)[0]
     ligand_name = cmd.get_object_list(ligand_selection)[0]
+    assert_organic(ligand_name)
 
     to_save_protein = Path(gettempdir()) / f"{protein_name}.pdb"
     to_save_ligand = Path(gettempdir()) / f"{ligand_name}.sdf"
@@ -242,26 +270,37 @@ class Pymol_Docking_GUI(object):
             self.comboBox_DX.setCurrentIndex(1)
 
     def setupUi(self, Dialog):
-        # Based on auto-generated code from ui file
-        from pymol.Qt import QtCore, QtWidgets
-        Dialog.setObjectName("Form")
-        Dialog.resize(662, 300)
+        from PyQt5 import QtCore, QtGui, QtWidgets
+        Dialog.setObjectName("Dialog")
+        Dialog.resize(662, 229)
         self.buttonBox = QtWidgets.QDialogButtonBox(Dialog)
-        self.buttonBox.setGeometry(QtCore.QRect(230, 240, 193, 28))
+        self.buttonBox.setGeometry(QtCore.QRect(410, 140, 193, 28))
         self.buttonBox.setStandardButtons(QtWidgets.QDialogButtonBox.Cancel|QtWidgets.QDialogButtonBox.Ok)
         self.buttonBox.setObjectName("buttonBox")
-        self.comboBox_SX = QtWidgets.QComboBox(Dialog)
-        self.comboBox_SX.setGeometry(QtCore.QRect(30, 40, 221, 31))
+        self.verticalLayoutWidget = QtWidgets.QWidget(Dialog)
+        self.verticalLayoutWidget.setGeometry(QtCore.QRect(40, 20, 251, 191))
+        self.verticalLayoutWidget.setObjectName("verticalLayoutWidget")
+        self.verticalLayout = QtWidgets.QVBoxLayout(self.verticalLayoutWidget)
+        self.verticalLayout.setContentsMargins(0, 0, 0, 0)
+        self.verticalLayout.setObjectName("verticalLayout")
+        self.comboBox_SX = QtWidgets.QComboBox(self.verticalLayoutWidget)
         self.comboBox_SX.setObjectName("comboBox_SX")
-        self.comboBox_DX = QtWidgets.QComboBox(Dialog)
-        self.comboBox_DX.setGeometry(QtCore.QRect(410, 40, 221, 31))
+        self.verticalLayout.addWidget(self.comboBox_SX)
+        self.comboBox_DX = QtWidgets.QComboBox(self.verticalLayoutWidget)
         self.comboBox_DX.setObjectName("comboBox_DX")
-        self.mode_chooser = QtWidgets.QComboBox(Dialog)
-        self.mode_chooser.setGeometry(QtCore.QRect(210, 100, 221, 22))
+        self.verticalLayout.addWidget(self.comboBox_DX)
+        self.horizontalLayoutWidget = QtWidgets.QWidget(Dialog)
+        self.horizontalLayoutWidget.setGeometry(QtCore.QRect(370, 20, 271, 89))
+        self.horizontalLayoutWidget.setObjectName("horizontalLayoutWidget")
+        self.horizontalLayout = QtWidgets.QHBoxLayout(self.horizontalLayoutWidget)
+        self.horizontalLayout.setContentsMargins(0, 0, 0, 0)
+        self.horizontalLayout.setObjectName("horizontalLayout")
+        self.mode_chooser = QtWidgets.QComboBox(self.horizontalLayoutWidget)
         self.mode_chooser.setObjectName("mode_chooser")
-        self.output_chooser = QtWidgets.QPlainTextEdit(Dialog)
-        self.output_chooser.setGeometry(QtCore.QRect(210, 150, 221, 41))
+        self.horizontalLayout.addWidget(self.mode_chooser)
+        self.output_chooser = QtWidgets.QPlainTextEdit(self.horizontalLayoutWidget)
         self.output_chooser.setObjectName("output_chooser")
+        self.horizontalLayout.addWidget(self.output_chooser)
 
         self.buttonBox.accepted.connect(Dialog.accept)
         self.buttonBox.rejected.connect(Dialog.reject)

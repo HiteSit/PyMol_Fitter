@@ -14,13 +14,13 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 class Ui_Form(object):
     def setupUi(self, Form):
         Form.setObjectName("Form")
-        Form.resize(662, 229)
+        Form.resize(662, 255)
         self.buttonBox = QtWidgets.QDialogButtonBox(Form)
-        self.buttonBox.setGeometry(QtCore.QRect(410, 140, 193, 28))
+        self.buttonBox.setGeometry(QtCore.QRect(400, 130, 193, 28))
         self.buttonBox.setStandardButtons(QtWidgets.QDialogButtonBox.Cancel|QtWidgets.QDialogButtonBox.Ok)
         self.buttonBox.setObjectName("buttonBox")
         self.verticalLayoutWidget = QtWidgets.QWidget(Form)
-        self.verticalLayoutWidget.setGeometry(QtCore.QRect(40, 20, 251, 191))
+        self.verticalLayoutWidget.setGeometry(QtCore.QRect(40, 20, 271, 141))
         self.verticalLayoutWidget.setObjectName("verticalLayoutWidget")
         self.verticalLayout = QtWidgets.QVBoxLayout(self.verticalLayoutWidget)
         self.verticalLayout.setContentsMargins(0, 0, 0, 0)
@@ -43,6 +43,10 @@ class Ui_Form(object):
         self.output_chooser = QtWidgets.QPlainTextEdit(self.horizontalLayoutWidget)
         self.output_chooser.setObjectName("output_chooser")
         self.horizontalLayout.addWidget(self.output_chooser)
+        self.progressBar = QtWidgets.QProgressBar(Form)
+        self.progressBar.setGeometry(QtCore.QRect(407, 200, 181, 23))
+        self.progressBar.setProperty("value", 24)
+        self.progressBar.setObjectName("progressBar")
 
         self.retranslateUi(Form)
         QtCore.QMetaObject.connectSlotsByName(Form)

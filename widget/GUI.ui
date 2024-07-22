@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>662</width>
-    <height>229</height>
+    <height>255</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -16,8 +16,8 @@
   <widget class="QDialogButtonBox" name="buttonBox">
    <property name="geometry">
     <rect>
-     <x>410</x>
-     <y>140</y>
+     <x>400</x>
+     <y>130</y>
      <width>193</width>
      <height>28</height>
     </rect>
@@ -31,8 +31,8 @@
     <rect>
      <x>40</x>
      <y>20</y>
-     <width>251</width>
-     <height>191</height>
+     <width>271</width>
+     <height>141</height>
     </rect>
    </property>
    <layout class="QVBoxLayout" name="verticalLayout">
@@ -61,6 +61,19 @@
      <widget class="QPlainTextEdit" name="output_chooser"/>
     </item>
    </layout>
+  </widget>
+  <widget class="QProgressBar" name="progressBar">
+   <property name="geometry">
+    <rect>
+     <x>407</x>
+     <y>200</y>
+     <width>181</width>
+     <height>23</height>
+    </rect>
+   </property>
+   <property name="value">
+    <number>24</number>
+   </property>
   </widget>
  </widget>
  <resources/>
