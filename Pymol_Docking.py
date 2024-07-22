@@ -187,3 +187,90 @@ def on_site_docking(protein_selection, ligand_selection, mode, outname: str):
 
     cmd.load(str(docked_sdf))
 # %%
+
+#################################################################################
+########################### Start of pymol plugin code ##########################
+#################################################################################
+
+def _get_select_list():
+    '''
+    Get either a list of object names, or a list of chain selections
+    '''
+    loaded_objects = [name for name in cmd.get_names('all', 1) if '_cluster_' not in name]
+
+    # if single object, try chain selections
+    if len(loaded_objects) == 1:
+        chains = cmd.get_chains(loaded_objects[0])
+        if len(chains) > 1:
+            loaded_objects = ['{} & chain {}'.format(loaded_objects[0], chain) for chain in chains]
+
+    return loaded_objects
+
+
+class Pymol_Docking_GUI(object):
+    ''' Qt version of the Plugin GUI '''
+    def __init__(self):
+        from pymol.Qt import QtWidgets
+        dialog = QtWidgets.QDialog()
+        self.setupUi(dialog)
+        self.populate_ligand_select_list()
+        self.choose_modes()
+        dialog.accepted.connect(self.accept)
+        dialog.exec_()
+
+    def accept(self):
+        s1 = self.comboBox_SX.currentText()
+        s2 = self.comboBox_DX.currentText()
+        mode = self.mode_chooser.currentText()
+        outname = self.output_chooser.toPlainText()
+        on_site_docking(s1, s2, mode, outname)
+
+    def choose_modes(self):
+        possible_choices = ["Minimize", "Dock"]
+        self.mode_chooser.addItems(possible_choices)
+
+    def populate_ligand_select_list(self):
+        loaded_objects = _get_select_list()
+
+        self.comboBox_SX.clear()
+        self.comboBox_DX.clear()
+
+        self.comboBox_SX.addItems(loaded_objects)
+        self.comboBox_DX.addItems(loaded_objects)
+
+        if len(loaded_objects) > 1:
+            self.comboBox_DX.setCurrentIndex(1)
+
+    def setupUi(self, Dialog):
+        # Based on auto-generated code from ui file
+        from pymol.Qt import QtCore, QtWidgets
+        Dialog.setObjectName("Form")
+        Dialog.resize(662, 300)
+        self.buttonBox = QtWidgets.QDialogButtonBox(Dialog)
+        self.buttonBox.setGeometry(QtCore.QRect(230, 240, 193, 28))
+        self.buttonBox.setStandardButtons(QtWidgets.QDialogButtonBox.Cancel|QtWidgets.QDialogButtonBox.Ok)
+        self.buttonBox.setObjectName("buttonBox")
+        self.comboBox_SX = QtWidgets.QComboBox(Dialog)
+        self.comboBox_SX.setGeometry(QtCore.QRect(30, 40, 221, 31))
+        self.comboBox_SX.setObjectName("comboBox_SX")
+        self.comboBox_DX = QtWidgets.QComboBox(Dialog)
+        self.comboBox_DX.setGeometry(QtCore.QRect(410, 40, 221, 31))
+        self.comboBox_DX.setObjectName("comboBox_DX")
+        self.mode_chooser = QtWidgets.QComboBox(Dialog)
+        self.mode_chooser.setGeometry(QtCore.QRect(210, 100, 221, 22))
+        self.mode_chooser.setObjectName("mode_chooser")
+        self.output_chooser = QtWidgets.QPlainTextEdit(Dialog)
+        self.output_chooser.setGeometry(QtCore.QRect(210, 150, 221, 41))
+        self.output_chooser.setObjectName("output_chooser")
+
+        self.buttonBox.accepted.connect(Dialog.accept)
+        self.buttonBox.rejected.connect(Dialog.reject)
+
+
+def __init__(self):
+    try:
+        from pymol.plugins import addmenuitemqt
+        addmenuitemqt('Pymol Docking', Pymol_Docking_GUI)
+        return
+    except Exception as e:
+        print(e)
