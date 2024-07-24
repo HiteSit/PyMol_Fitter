@@ -17,6 +17,7 @@ from pymol import cmd
 
 from openeye import oechem
 from openeye import oequacpac
+from openeye import oeomega
 
 # %%
 logging.basicConfig(level=logging.DEBUG,
@@ -57,15 +58,34 @@ def openeye_fixer(oemol, explicit_H=True):
 
     return oechem.OEGraphMol(to_edit)
 
+def openeye_gen3d(smile) -> Path:
+    oemol = oechem.OEMol()
+    oechem.OESmilesToMol(oemol, smile)
+
+    # Generate 3D coordinates
+    builder = oeomega.OEConformerBuilder()
+    ret_code = builder.Build(oemol)
+
+    tmp_save = Path(gettempdir()) / "smiles_3d.sdf"
+    ofs = oechem.oemolostream(tmp_save.as_posix())
+    oechem.OEWriteMolecule(ofs, oechem.OEGraphMol(oemol))
+
+    return tmp_save
+
 
 # %%
 class Pymol_Docking:
-    def __init__(self, protein_pdb: str, ligands_sdf: str):
+    def __init__(self, protein_pdb: str, input_ligands: str):
         self.workdir: Path = Path(os.getcwd())
         self.protein_pdb: Path = Path(protein_pdb)
         self.crystal_sdf: Path = Path("Crystal.sdf")
 
-        self.ligands_sdf: Path = Path(ligands_sdf)
+        if os.path.exists(input_ligands):
+            self.ligands_sdf: Path = Path(input_ligands)
+            self.input_mode = "SDF"
+        else:
+            self.ligands_smiles: str = input_ligands
+            self.input_mode = "SMILES"
 
     def prepare_protein(self) -> Path:
         protein_basename: str = self.protein_pdb.stem
@@ -98,10 +118,20 @@ class Pymol_Docking:
         return TMP_fixed_sdf.resolve()
 
     def prepare_ligands(self):
-        fixed_crystal: Path = self.fix_3d_mol(self.crystal_sdf, "crystal")
-        fixed_ligands: Path = self.fix_3d_mol(self.ligands_sdf, "ligand")
+        if self.input_mode == "SDF":
+            logger.info("Preparing ligands from SDF")
+            fixed_crystal: Path = self.fix_3d_mol(self.crystal_sdf, "crystal")
+            fixed_ligands: Path = self.fix_3d_mol(self.ligands_sdf, "ligand")
 
-        return fixed_ligands.resolve(), fixed_crystal.resolve()
+            return fixed_ligands.resolve(), fixed_crystal.resolve()
+
+        elif self.input_mode == "SMILES":
+            logger.info("Preparing ligands from SMILES")
+            fixed_crystal: Path = self.fix_3d_mol(self.crystal_sdf, "crystal")
+            smiles_3d: Path = openeye_gen3d(self.ligands_smiles)
+            fixed_ligands: Path = self.fix_3d_mol(smiles_3d, "ligand")
+
+            return fixed_ligands.resolve(), fixed_crystal.resolve()
 
     def run_docking(self, mode: str, docking_basename: str) -> Path:
         # Fix the protein
@@ -130,6 +160,7 @@ class Pymol_Docking:
                 subprocess.run(smina_lst, check=True, stdout=log_file, stderr=log_file)
 
         elif mode == "Minimize":
+            assert self.input_mode == "SDF", "Minimization only works with SDF input"
             smina_lst = [
                 "smina",
                 "-r", protein_PKA.as_posix(),
@@ -144,9 +175,45 @@ class Pymol_Docking:
 
         return smina_output
 
-# # Dry Example
-# pymol_docking = Pymol_Docking("./LAC3.pdb", "Ligand.sdf")
-# pymol_docking.run_docking("Minimize", "XXX")
+def assert_organic(selection):
+    """
+    Assert that the given PyMOL selection consists of only organic molecules.
+
+    Parameters:
+    - selection (str): The PyMOL selection string to check.
+
+    Raises:
+    - AssertionError: If the selection contains non-organic molecules.
+    """
+    # Create a temporary selection for organic molecules
+    cmd.select("organic_check", f"{selection} and organic")
+
+    # Get the total number of atoms in the original selection
+    total_atoms = cmd.count_atoms(selection)
+
+    # Get the number of atoms in the organic selection
+    organic_atoms = cmd.count_atoms("organic_check")
+
+    # Check if the number of organic atoms is equal to the total number of atoms
+    assert organic_atoms == total_atoms, "Selection contains non-organic molecules."
+    logger.info(f"Selection {selection} contains only organic molecules.")
+
+    # Delete the temporary selection
+    cmd.delete("organic_check")
+
+# %%
+@cmd.extend
+def off_site_docking(protein_selection, ligand_smiles: str, outname:str):
+
+    protein_name = cmd.get_object_list(protein_selection)[0]
+    to_save_protein: Path = Path(gettempdir()) / f"{protein_name}.pdb"
+
+    cmd.save(str(to_save_protein), protein_selection)
+
+    pymol_docking = Pymol_Docking(str(to_save_protein), ligand_smiles)
+    docked_sdf: Path = pymol_docking.run_docking("Dock", outname)
+
+    cmd.load(str(docked_sdf))
 
 # %%
 @cmd.extend
@@ -170,32 +237,6 @@ def on_site_docking(protein_selection, ligand_selection, mode, outname: str):
     Returns:
     None. The result of the docking or minimization is loaded into PyMOL.
     """
-
-    def assert_organic(selection):
-        """
-        Assert that the given PyMOL selection consists of only organic molecules.
-
-        Parameters:
-        - selection (str): The PyMOL selection string to check.
-
-        Raises:
-        - AssertionError: If the selection contains non-organic molecules.
-        """
-        # Create a temporary selection for organic molecules
-        cmd.select("organic_check", f"{selection} and organic")
-
-        # Get the total number of atoms in the original selection
-        total_atoms = cmd.count_atoms(selection)
-
-        # Get the number of atoms in the organic selection
-        organic_atoms = cmd.count_atoms("organic_check")
-
-        # Check if the number of organic atoms is equal to the total number of atoms
-        assert organic_atoms == total_atoms, "Selection contains non-organic molecules."
-        logger.info(f"Selection {selection} contains only organic molecules.")
-
-        # Delete the temporary selection
-        cmd.delete("organic_check")
 
     # Assert the mode
     assert mode in ["Minimize", "Dock"]

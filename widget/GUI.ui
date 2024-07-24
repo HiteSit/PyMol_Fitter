@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>662</width>
-    <height>255</height>
+    <height>302</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -17,7 +17,7 @@
    <property name="geometry">
     <rect>
      <x>400</x>
-     <y>130</y>
+     <y>260</y>
      <width>193</width>
      <height>28</height>
     </rect>
@@ -32,47 +32,54 @@
      <x>40</x>
      <y>20</y>
      <width>271</width>
-     <height>141</height>
+     <height>91</height>
     </rect>
    </property>
    <layout class="QVBoxLayout" name="verticalLayout">
     <item>
-     <widget class="QComboBox" name="comboBox_SX"/>
+     <widget class="QComboBox" name="protein_chooser_1"/>
     </item>
     <item>
-     <widget class="QComboBox" name="comboBox_DX"/>
+     <widget class="QComboBox" name="ligand_chooser_1"/>
     </item>
    </layout>
   </widget>
-  <widget class="QWidget" name="horizontalLayoutWidget">
+  <widget class="QWidget" name="verticalLayoutWidget_2">
+   <property name="geometry">
+    <rect>
+     <x>40</x>
+     <y>140</y>
+     <width>271</width>
+     <height>116</height>
+    </rect>
+   </property>
+   <layout class="QVBoxLayout" name="verticalLayout_2">
+    <item>
+     <widget class="QComboBox" name="protein_chooser_2"/>
+    </item>
+    <item>
+     <widget class="QPlainTextEdit" name="smile_chooser_2"/>
+    </item>
+   </layout>
+  </widget>
+  <widget class="QComboBox" name="mode_chooser">
+   <property name="geometry">
+    <rect>
+     <x>440</x>
+     <y>80</y>
+     <width>73</width>
+     <height>22</height>
+    </rect>
+   </property>
+  </widget>
+  <widget class="QTextEdit" name="output_chooser">
    <property name="geometry">
     <rect>
      <x>370</x>
-     <y>20</y>
-     <width>271</width>
-     <height>89</height>
+     <y>150</y>
+     <width>261</width>
+     <height>41</height>
     </rect>
-   </property>
-   <layout class="QHBoxLayout" name="horizontalLayout">
-    <item>
-     <widget class="QComboBox" name="mode_chooser"/>
-    </item>
-    <item>
-     <widget class="QPlainTextEdit" name="output_chooser"/>
-    </item>
-   </layout>
-  </widget>
-  <widget class="QProgressBar" name="progressBar">
-   <property name="geometry">
-    <rect>
-     <x>407</x>
-     <y>200</y>
-     <width>181</width>
-     <height>23</height>
-    </rect>
-   </property>
-   <property name="value">
-    <number>24</number>
    </property>
   </widget>
  </widget>
