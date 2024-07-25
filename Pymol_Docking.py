@@ -29,18 +29,16 @@ logger = logging.getLogger(__name__)
 
 
 # %%
-def openeye_fixer(oemol, explicit_H=True):
+def openeye_fixer(oemol, explicit_H=True, protonation=False):
     to_edit = oechem.OEGraphMol(oemol)
 
-    oechem.OEDetermineConnectivity(to_edit)
-    oechem.OEFindRingAtomsAndBonds(to_edit)
-    oechem.OEPerceiveBondOrders(to_edit)
-    oechem.OEAssignImplicitHydrogens(to_edit)
-    oechem.OEAssignFormalCharges(to_edit)
-
+    # oechem.OEDetermineConnectivity(to_edit)
+    # oechem.OEFindRingAtomsAndBonds(to_edit)
+    # oechem.OEPerceiveBondOrders(to_edit)
+    # oechem.OEAssignImplicitHydrogens(to_edit)
+    # oechem.OEAssignFormalCharges(to_edit)
     oechem.OEClearAromaticFlags(to_edit)
 
-    oechem.OEFindRingAtomsAndBonds(to_edit)
     oechem.OEAssignAromaticFlags(to_edit)
     for bond in to_edit.GetBonds():
         if bond.IsAromatic():
@@ -54,7 +52,8 @@ def openeye_fixer(oemol, explicit_H=True):
 
     if explicit_H:
         oechem.OEAddExplicitHydrogens(to_edit)
-        oequacpac.OEGetReasonableProtomer(to_edit)
+        if protonation == True:
+            oequacpac.OEGetReasonableProtomer(to_edit)
 
     return oechem.OEGraphMol(to_edit)
 
@@ -203,17 +202,17 @@ def assert_organic(selection):
 
 # %%
 @cmd.extend
-def off_site_docking(protein_selection, ligand_smiles: str, outname:str):
+def off_site_docking(protein_selection, ligand_smiles, outname:str):
 
     protein_name = cmd.get_object_list(protein_selection)[0]
     to_save_protein: Path = Path(gettempdir()) / f"{protein_name}.pdb"
 
-    cmd.save(str(to_save_protein), protein_selection)
+    cmd.save(to_save_protein.as_posix(), protein_selection)
 
-    pymol_docking = Pymol_Docking(str(to_save_protein), ligand_smiles)
+    pymol_docking = Pymol_Docking(to_save_protein.as_posix(), str(ligand_smiles))
     docked_sdf: Path = pymol_docking.run_docking("Dock", outname)
 
-    cmd.load(str(docked_sdf))
+    cmd.load(docked_sdf.as_posix())
 
 # %%
 @cmd.extend

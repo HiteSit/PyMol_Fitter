@@ -60,7 +60,7 @@ class TestPymolDocking_SMILE(unittest.TestCase):
         self.crystal_sdf: Path = Path("sample_data/Crystal.sdf")
         shutil.copy(self.crystal_sdf, "Crystal.sdf")
 
-        self.input_ligands: str = "C1=CC=CC=C1"
+        self.input_ligands: str = "CC1=C2NC(=O)C(CC(=O)NC(CC3=CC=CC=C3)C3=CC=CC=C3)OC2=CC=C1"
 
         self.protein_basename: str = self.protein_pdb.stem
         self.protein_PREP: Path = Path(f"{self.protein_basename}_PREP.pdb")
@@ -92,4 +92,20 @@ class TestPymolDocking_SMILE(unittest.TestCase):
     def test_run_docking(self):
         self.pymol_docking_class.run_docking("Dock", "XXX")
         self.assertTrue(Path("XXX.sdf").exists())
+        size = os.path.getsize("XXX.sdf")
+        self.assertGreater(size, 0)
+
         self.assertTrue(Path("XXX.log").exists())
+
+    def test_off_site_docking(self):
+        from Pymol_Docking import off_site_docking
+        from pymol import cmd
+        cmd.reinitialize()
+
+        protein_PREP: Path = self.pymol_docking_class.prepare_protein()
+        cmd.load(self.protein_PREP.as_posix(), "protein_")
+        off_site_docking("protein_", "[H]N([C@H](C)C1=CC=CC=C1C)C1=CN=C2N=C(Cl)C3=C(N([H])C=C3)N12", "XXX")
+
+        size = os.path.getsize("XXX.sdf")
+        self.assertTrue(Path("XXX.sdf").exists())
+        self.assertGreater(size, 0)
