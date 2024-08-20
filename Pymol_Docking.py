@@ -1,23 +1,16 @@
 # %%
-import os
-import shutil
-import glob
 import logging
-import pathlib
-from pathlib import Path
-from tempfile import gettempdir, NamedTemporaryFile
-from typing import List, Dict, Union
-
+import os
 import subprocess
-
-from openmm.app import PDBFile
-from pdbfixer import PDBFixer
-
-from pymol import cmd
+from pathlib import Path
+from tempfile import gettempdir
 
 from openeye import oechem
-from openeye import oequacpac
 from openeye import oeomega
+from openeye import oequacpac
+from openmm.app import PDBFile
+from pdbfixer import PDBFixer
+from pymol import cmd
 
 # %%
 logging.basicConfig(level=logging.DEBUG,
@@ -212,7 +205,7 @@ def off_site_docking(protein_selection, ligand_smiles, outname:str):
     pymol_docking = Pymol_Docking(to_save_protein.as_posix(), str(ligand_smiles))
     docked_sdf: Path = pymol_docking.run_docking("Dock", outname)
 
-    cmd.load(docked_sdf.as_posix())
+    cmd.load(str(docked_sdf))
 
 # %%
 @cmd.extend
@@ -282,68 +275,106 @@ class Pymol_Docking_GUI(object):
         dialog = QtWidgets.QDialog()
         self.setupUi(dialog)
         self.populate_ligand_select_list()
-        self.choose_modes()
-        dialog.accepted.connect(self.accept)
+        self.choose_docking_modes()
+
+        self.choose_setting()
+        dialog.accepted.connect(self.on_dialog_accepted)
         dialog.exec_()
 
-    def accept(self):
-        s1 = self.comboBox_SX.currentText()
-        s2 = self.comboBox_DX.currentText()
+    def on_dialog_accepted(self):
+        modality = self.mode_chooser_2.currentText().strip()
+
+        if modality == "In-Site":
+            self.in_site_wrapper()
+            logger.info("In-Site docking selected")
+        elif modality == "Off-Site":
+            self.off_site_wrapper()
+            logger.info("Off-Site docking selected")
+        else:
+            logger.warning("No valid modality selected")
+
+    def in_site_wrapper(self):
+        s1 = self.protein_chooser_1.currentText()
+        s2 = self.ligand_chooser_1.currentText()
         mode = self.mode_chooser.currentText()
         outname = self.output_chooser.toPlainText()
         on_site_docking(s1, s2, mode, outname)
 
-    def choose_modes(self):
+    def off_site_wrapper(self):
+        s1 = self.protein_chooser_2.currentText()
+        s2 = self.smile_chooser_2.toPlainText()
+        outname = self.output_chooser_2.toPlainText()
+        off_site_docking(s1, str(s2), outname)
+
+    def choose_setting(self):
+        possible_choices = ["In-Site", "Off-Site"]
+        self.mode_chooser_2.addItems(possible_choices)
+
+    def choose_docking_modes(self):
         possible_choices = ["Minimize", "Dock"]
         self.mode_chooser.addItems(possible_choices)
 
     def populate_ligand_select_list(self):
         loaded_objects = _get_select_list()
 
-        self.comboBox_SX.clear()
-        self.comboBox_DX.clear()
+        self.protein_chooser_1.clear()
+        self.protein_chooser_2.clear()
+        self.ligand_chooser_1.clear()
 
-        self.comboBox_SX.addItems(loaded_objects)
-        self.comboBox_DX.addItems(loaded_objects)
+        self.protein_chooser_1.addItems(loaded_objects)
+        self.protein_chooser_2.addItems(loaded_objects)
+        self.ligand_chooser_1.addItems(loaded_objects)
 
-        if len(loaded_objects) > 1:
-            self.comboBox_DX.setCurrentIndex(1)
+        # if len(loaded_objects) > 1:
+        #     self.comboBox_DX.setCurrentIndex(1)
 
-    def setupUi(self, Dialog):
-        from PyQt5 import QtCore, QtGui, QtWidgets
-        Dialog.setObjectName("Dialog")
-        Dialog.resize(662, 229)
-        self.buttonBox = QtWidgets.QDialogButtonBox(Dialog)
-        self.buttonBox.setGeometry(QtCore.QRect(410, 140, 193, 28))
+    def setupUi(self, Form):
+        from PyQt5 import QtCore, QtWidgets
+        Form.setObjectName("Form")
+        Form.resize(662, 302)
+        self.buttonBox = QtWidgets.QDialogButtonBox(Form)
+        self.buttonBox.setGeometry(QtCore.QRect(440, 270, 193, 28))
         self.buttonBox.setStandardButtons(QtWidgets.QDialogButtonBox.Cancel|QtWidgets.QDialogButtonBox.Ok)
         self.buttonBox.setObjectName("buttonBox")
-        self.verticalLayoutWidget = QtWidgets.QWidget(Dialog)
-        self.verticalLayoutWidget.setGeometry(QtCore.QRect(40, 20, 251, 191))
+        self.verticalLayoutWidget = QtWidgets.QWidget(Form)
+        self.verticalLayoutWidget.setGeometry(QtCore.QRect(170, 20, 271, 91))
         self.verticalLayoutWidget.setObjectName("verticalLayoutWidget")
         self.verticalLayout = QtWidgets.QVBoxLayout(self.verticalLayoutWidget)
         self.verticalLayout.setContentsMargins(0, 0, 0, 0)
         self.verticalLayout.setObjectName("verticalLayout")
-        self.comboBox_SX = QtWidgets.QComboBox(self.verticalLayoutWidget)
-        self.comboBox_SX.setObjectName("comboBox_SX")
-        self.verticalLayout.addWidget(self.comboBox_SX)
-        self.comboBox_DX = QtWidgets.QComboBox(self.verticalLayoutWidget)
-        self.comboBox_DX.setObjectName("comboBox_DX")
-        self.verticalLayout.addWidget(self.comboBox_DX)
-        self.horizontalLayoutWidget = QtWidgets.QWidget(Dialog)
-        self.horizontalLayoutWidget.setGeometry(QtCore.QRect(370, 20, 271, 89))
-        self.horizontalLayoutWidget.setObjectName("horizontalLayoutWidget")
-        self.horizontalLayout = QtWidgets.QHBoxLayout(self.horizontalLayoutWidget)
-        self.horizontalLayout.setContentsMargins(0, 0, 0, 0)
-        self.horizontalLayout.setObjectName("horizontalLayout")
-        self.mode_chooser = QtWidgets.QComboBox(self.horizontalLayoutWidget)
+        self.protein_chooser_1 = QtWidgets.QComboBox(self.verticalLayoutWidget)
+        self.protein_chooser_1.setObjectName("protein_chooser_1")
+        self.verticalLayout.addWidget(self.protein_chooser_1)
+        self.ligand_chooser_1 = QtWidgets.QComboBox(self.verticalLayoutWidget)
+        self.ligand_chooser_1.setObjectName("ligand_chooser_1")
+        self.verticalLayout.addWidget(self.ligand_chooser_1)
+        self.mode_chooser = QtWidgets.QComboBox(self.verticalLayoutWidget)
         self.mode_chooser.setObjectName("mode_chooser")
-        self.horizontalLayout.addWidget(self.mode_chooser)
-        self.output_chooser = QtWidgets.QPlainTextEdit(self.horizontalLayoutWidget)
+        self.verticalLayout.addWidget(self.mode_chooser)
+        self.verticalLayoutWidget_2 = QtWidgets.QWidget(Form)
+        self.verticalLayoutWidget_2.setGeometry(QtCore.QRect(170, 140, 271, 118))
+        self.verticalLayoutWidget_2.setObjectName("verticalLayoutWidget_2")
+        self.verticalLayout_2 = QtWidgets.QVBoxLayout(self.verticalLayoutWidget_2)
+        self.verticalLayout_2.setContentsMargins(0, 0, 0, 0)
+        self.verticalLayout_2.setObjectName("verticalLayout_2")
+        self.protein_chooser_2 = QtWidgets.QComboBox(self.verticalLayoutWidget_2)
+        self.protein_chooser_2.setObjectName("protein_chooser_2")
+        self.verticalLayout_2.addWidget(self.protein_chooser_2)
+        self.smile_chooser_2 = QtWidgets.QPlainTextEdit(self.verticalLayoutWidget_2)
+        self.smile_chooser_2.setObjectName("smile_chooser_2")
+        self.verticalLayout_2.addWidget(self.smile_chooser_2)
+        self.output_chooser = QtWidgets.QTextEdit(Form)
+        self.output_chooser.setGeometry(QtCore.QRect(460, 20, 151, 91))
         self.output_chooser.setObjectName("output_chooser")
-        self.horizontalLayout.addWidget(self.output_chooser)
+        self.mode_chooser_2 = QtWidgets.QComboBox(Form)
+        self.mode_chooser_2.setGeometry(QtCore.QRect(40, 140, 73, 22))
+        self.mode_chooser_2.setObjectName("mode_chooser_2")
+        self.output_chooser_2 = QtWidgets.QTextEdit(Form)
+        self.output_chooser_2.setGeometry(QtCore.QRect(460, 140, 151, 111))
+        self.output_chooser_2.setObjectName("output_chooser_2")
 
-        self.buttonBox.accepted.connect(Dialog.accept)
-        self.buttonBox.rejected.connect(Dialog.reject)
+        self.buttonBox.accepted.connect(Form.accept)
+        self.buttonBox.rejected.connect(Form.reject)
 
 
 def __init__(self):
