@@ -270,6 +270,7 @@ def _get_select_list():
 
 class Pymol_Docking_GUI(object):
     ''' Qt version of the Plugin GUI '''
+
     def __init__(self):
         from pymol.Qt import QtWidgets
         dialog = QtWidgets.QDialog()
@@ -277,9 +278,27 @@ class Pymol_Docking_GUI(object):
         self.populate_ligand_select_list()
         self.choose_docking_modes()
 
+        # Choose modality
         self.choose_setting()
+
+        # Connect modality chooser signal to a method that clears and repopulates the selectors
+        self.mode_chooser_2.currentIndexChanged.connect(self.clear_and_repopulate_selectors)
+
+        # Connect the accepted signal to a method that checks the modality
         dialog.accepted.connect(self.on_dialog_accepted)
+
         dialog.exec_()
+
+    def clear_and_repopulate_selectors(self):
+        """Clear and repopulate the contents of the protein and ligand selectors."""
+        self.protein_chooser_1.clear()
+        self.protein_chooser_2.clear()
+        self.ligand_chooser_1.clear()
+        self.mode_chooser.clear()
+
+        # Repopulate the selectors with available options
+        self.populate_ligand_select_list()
+        self.choose_docking_modes()
 
     def on_dialog_accepted(self):
         modality = self.mode_chooser_2.currentText().strip()
@@ -298,12 +317,14 @@ class Pymol_Docking_GUI(object):
         s2 = self.ligand_chooser_1.currentText()
         mode = self.mode_chooser.currentText()
         outname = self.output_chooser.toPlainText()
+        logger.info("Running on-site docking...")
         on_site_docking(s1, s2, mode, outname)
 
     def off_site_wrapper(self):
         s1 = self.protein_chooser_2.currentText()
         s2 = self.smile_chooser_2.toPlainText()
         outname = self.output_chooser_2.toPlainText()
+        logger.info("Running off-site docking...")
         off_site_docking(s1, str(s2), outname)
 
     def choose_setting(self):
@@ -324,9 +345,6 @@ class Pymol_Docking_GUI(object):
         self.protein_chooser_1.addItems(loaded_objects)
         self.protein_chooser_2.addItems(loaded_objects)
         self.ligand_chooser_1.addItems(loaded_objects)
-
-        # if len(loaded_objects) > 1:
-        #     self.comboBox_DX.setCurrentIndex(1)
 
     def setupUi(self, Form):
         from PyQt5 import QtCore, QtWidgets
