@@ -1,16 +1,22 @@
 # %%
 import logging
 import os
+import shutil
 import subprocess
 from pathlib import Path
 from tempfile import gettempdir
+
+from typing import Optional, List, Tuple, Dict, Any, Union
 
 from openeye import oechem
 from openeye import oeomega
 from openeye import oequacpac
 from openmm.app import PDBFile
+
 from pdbfixer import PDBFixer
 from pymol import cmd
+
+from openbabel import pybel
 
 # %%
 logging.basicConfig(level=logging.DEBUG,
@@ -63,6 +69,153 @@ def openeye_gen3d(smile) -> Path:
     oechem.OEWriteMolecule(ofs, oechem.OEGraphMol(oemol))
 
     return tmp_save
+
+def openeye_converter(input_file: Path, output_file: Path):
+    ifs = oechem.oemolistream()
+    ofs = oechem.oemolostream(str(output_file))
+    if ifs.open(str(input_file)):
+        for oemol in ifs.GetOEGraphMols():
+            oechem.OEWriteMolecule(ofs, oemol)
+
+class Plants_Docking:
+    def __init__(self, protein_pdb: Path, input_ligands: Union[Path, str]):
+        self.workdir: Path = Path(os.getcwd())
+        self.protein_pdb: Path = protein_pdb
+        self.crystal_sdf: Path = Path("Crystal.sdf")
+
+        if isinstance(input_ligands, str):
+            self.ligands_smiles: str = input_ligands
+            self.input_mode = "SMILES"
+        elif isinstance(input_ligands, Path):
+            self.input_ligands: Path = input_ligands
+            self.input_mode = "SDF"
+
+        self.plants_env_var()
+
+    def plants_env_var(self):
+        os.environ['PATH'] = '/home/hitesit/Software/PLANTS:' + os.environ.get('PATH', '')
+
+    def prepare_protein(self):
+        protein_basename: str = self.protein_pdb.stem
+
+        protein_tmp: Path = Path(gettempdir()) / f"{protein_basename}_tmp.pdb"
+        protein_PREP: Path = self.workdir / f"{protein_basename}_PREP.mol2"
+
+        fixer = PDBFixer(filename=str(self.protein_pdb))
+        fixer.removeHeterogens(keepWater=False)
+        fixer.findMissingResidues()
+        fixer.findMissingAtoms()
+        fixer.findNonstandardResidues()
+
+        fixer.addMissingAtoms()
+        fixer.addMissingHydrogens(7.4)
+
+        PDBFile.writeFile(fixer.topology, fixer.positions, open(str(protein_tmp), 'w'))
+
+        # Openbabel convert pdb to mol2
+        prt = next(pybel.readfile("pdb", str(protein_tmp)))
+        out = pybel.Outputfile("mol2", str(protein_PREP), overwrite=True)
+
+        out.write(prt)
+        out.close()
+
+        self.protein_PREP: Path = protein_PREP
+        return protein_PREP
+
+    @staticmethod
+    def fix_3d_mol(sdf_file: Path, TMP_basename: str) -> Path:
+        TMP_fixed_sdf = Path(gettempdir()) / f"{TMP_basename}_fixed.mol2"
+
+        ifs = oechem.oemolistream()
+        ofs = oechem.oemolostream(TMP_fixed_sdf.as_posix())
+
+        ifs.open(sdf_file.as_posix())
+        for oemol in ifs.GetOEGraphMols():
+            fixed_oemol = openeye_fixer(oemol)
+            oechem.OEWriteMolecule(ofs, fixed_oemol)
+
+        return TMP_fixed_sdf.resolve()
+
+    def prepare_ligands(self):
+        if self.input_mode == "SDF":
+            logger.info("Preparing ligands from SDF")
+            fixed_crystal: Path = self.fix_3d_mol(self.crystal_sdf, "crystal")
+            fixed_ligands: Path = self.fix_3d_mol(self.input_ligands, "ligand")
+
+            return fixed_ligands.resolve(), fixed_crystal.resolve()
+
+        elif self.input_mode == "SMILES":
+            logger.info("Preparing ligands from SMILES")
+            fixed_crystal: Path = self.fix_3d_mol(self.crystal_sdf, "crystal")
+            smiles_3d: Path = openeye_gen3d(self.ligands_smiles)
+            fixed_ligands: Path = self.fix_3d_mol(smiles_3d, "ligand")
+
+            return fixed_ligands.resolve(), fixed_crystal.resolve()
+
+    def _define_binding_site(self):
+        # temp convert the crystal.sdf to mol2
+        tmp_crystal: Path = Path(gettempdir()) / "tmp.mol2"
+        openeye_converter(self.crystal_sdf, tmp_crystal)
+
+        plants_command = f"plants.64bit --mode bind {str(tmp_crystal)} {str(self.protein_PREP)}"
+        print(plants_command)
+
+        box_res = subprocess.run(plants_command, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                 text=True, cwd=self.workdir)
+        box_infos = box_res.stdout.split("\n")
+
+        binding_site_center = box_infos[-4]
+        binding_site_radius = box_infos[-3]
+
+        return binding_site_center, binding_site_radius
+
+    def write_conf(self, ligand_to_dock: str, n_confs: int):
+        # Define the binding site
+        center, radius = self._define_binding_site()
+
+        config_path = self.workdir / "config.txt"
+        config_str = f"""### PLANTS configuration file
+# scoring function and search settings
+scoring_function chemplp
+search_speed speed1
+
+# input
+protein_file {self.protein_PREP}
+ligand_file {ligand_to_dock}
+
+# output
+output_dir plants_raw
+write_multi_mol2 1
+
+# binding site definition
+{center}
+{radius}
+
+# cluster algorithm
+cluster_structures {n_confs}
+cluster_rmsd 1.0
+"""
+
+        with open(config_path, "w") as config_file:
+            config_file.write(config_str)
+        return config_path
+
+    def _retrieve_docked_ligands(self):
+        plants_raw = self.workdir / "plants_raw"
+        docked_ligand: Path = plants_raw / "docked_ligands.mol2"
+
+        shutil.copy(docked_ligand, self.workdir / "docked_ligands.mol2")
+
+    def run_plants_docking(self, n_confs: int):
+        protein_PREP: Path = self.prepare_protein()
+        fixed_ligands, fixed_crystal = self.prepare_ligands()
+        config_path: Path = self.write_conf(str(fixed_ligands), n_confs)
+
+        runner = f"plants.64bit --mode screen {str(config_path)}"
+        subprocess.run(runner, shell=True, check=True, cwd=self.workdir)
+
+        self._retrieve_docked_ligands()
+        return
 
 
 # %%
@@ -125,7 +278,7 @@ class Pymol_Docking:
 
             return fixed_ligands.resolve(), fixed_crystal.resolve()
 
-    def run_docking(self, mode: str, docking_basename: str) -> Path:
+    def run_smina_docking(self, mode: str, docking_basename: str) -> Path:
         # Fix the protein
         print("Running protein preparation")
         protein_PKA: Path = self.prepare_protein()
@@ -203,7 +356,7 @@ def off_site_docking(protein_selection, ligand_smiles, outname:str):
     cmd.save(to_save_protein.as_posix(), protein_selection)
 
     pymol_docking = Pymol_Docking(to_save_protein.as_posix(), str(ligand_smiles))
-    docked_sdf: Path = pymol_docking.run_docking("Dock", outname)
+    docked_sdf: Path = pymol_docking.run_smina_docking("Dock", outname)
 
     cmd.load(str(docked_sdf))
 
@@ -244,7 +397,7 @@ def on_site_docking(protein_selection, ligand_selection, mode, outname: str):
     cmd.save(str(to_save_ligand), ligand_selection)
 
     pymol_docking = Pymol_Docking(str(to_save_protein), str(to_save_ligand))
-    docked_sdf: Path = pymol_docking.run_docking(mode, outname)
+    docked_sdf: Path = pymol_docking.run_smina_docking(mode, outname)
 
     cmd.load(str(docked_sdf))
 # %%

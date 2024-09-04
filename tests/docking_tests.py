@@ -50,7 +50,7 @@ class TestPymolDocking_SDF(unittest.TestCase):
         self.assertTrue(fixed_crystal.exists())
 
     def test_run_docking(self):
-        self.pymol_docking_class.run_docking("Dock", "XXX")
+        self.pymol_docking_class.run_smina_docking("Dock", "XXX")
         self.assertTrue(Path("XXX.sdf").exists())
         self.assertTrue(Path("XXX.log").exists())
 
@@ -90,7 +90,7 @@ class TestPymolDocking_SMILE(unittest.TestCase):
         self.assertTrue(fixed_crystal.exists())
 
     def test_run_docking(self):
-        self.pymol_docking_class.run_docking("Dock", "XXX")
+        self.pymol_docking_class.run_smina_docking("Dock", "XXX")
         self.assertTrue(Path("XXX.sdf").exists())
         size = os.path.getsize("XXX.sdf")
         self.assertGreater(size, 0)
