@@ -58,12 +58,13 @@ def poll_job(job_id, poll_url, poll_interval=1, max_polls=10):
     return job
 
 
-def prepare_protein_protoss(receptor : Path) -> Path :
+def prepare_protein_protoss(receptor: Path, receptor_protoss: Path) -> Path:
     """
     Prepares a protein using ProtoSS.
 
     Args:
-    receptor (Path): Path to the protein file in PDB format.
+    receptor (Path): Path to the input protein file in PDB format.
+    receptor_protoss (Path): Path where the prepared protein file should be saved.
 
     Returns:
     Path: Path to the prepared protein file in PDB format.
@@ -89,12 +90,9 @@ def prepare_protein_protoss(receptor : Path) -> Path :
 
     # Parse the protein structure from the StringIO object
     protein_structure = PDBParser().get_structure(protossed_protein['name'], protein_file)
-    
-    # Create the output file path by replacing the extension of the receptor file
-    output_file = Path(str(receptor).replace('.pdb', '_protoss.pdb'))
 
     # Open the output file in write mode
-    with output_file.open('w') as output_file_handle:
+    with open(receptor_protoss, 'w') as output_file_handle:
         # Create a PDBIO object
         pdbio = PDBIO()
         # Set the protein structure for saving
@@ -103,5 +101,5 @@ def prepare_protein_protoss(receptor : Path) -> Path :
         pdbio.save(output_file_handle)
     
     # Return the path to the prepared protein file
-    return output_file
+    return receptor_protoss
 

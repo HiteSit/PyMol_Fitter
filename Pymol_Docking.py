@@ -3,25 +3,278 @@ import logging
 import os
 import shutil
 import subprocess
+import io
+import time
+import warnings
 from pathlib import Path
 from tempfile import gettempdir
-
+from urllib.parse import urljoin
 from typing import Optional, List, Tuple, Dict, Any, Union
 
-from openeye import oechem
-from openeye import oeomega
-from openeye import oequacpac
-from openmm.app import PDBFile
-
-from pdbfixer import PDBFixer
 from pymol import cmd
-
 from openbabel import pybel
-from rdkit import Chem
+import datamol as dm
+import rdkit.Chem as rdChem
+from rdkit.Chem.EnumerateStereoisomers import EnumerateStereoisomers, StereoEnumerationOptions
+import requests
+from Bio.PDB import PDBParser
+from Bio.PDB.PDBIO import PDBIO
+import CDPL.Chem as Chem
+import CDPL.ConfGen as ConfGen
 
-from src.CDPK_Utils import CDPK_Runner
+# Suppress warnings
+warnings.filterwarnings("ignore", category=UserWarning)
+warnings.filterwarnings("ignore", category=DeprecationWarning)
 
-# %%
+#################################################################################
+########################### Protein Preparation Utilities ########################
+#################################################################################
+
+# ProteinsPlus API endpoints
+PROTEINS_PLUS_URL = 'https://proteins.plus/api/v2/'
+UPLOAD = urljoin(PROTEINS_PLUS_URL, 'molecule_handler/upload/')
+UPLOAD_JOBS = urljoin(PROTEINS_PLUS_URL, 'molecule_handler/upload/jobs/')
+PROTEINS = urljoin(PROTEINS_PLUS_URL, 'molecule_handler/proteins/')
+LIGANDS = urljoin(PROTEINS_PLUS_URL, 'molecule_handler/ligands/')
+PROTOSS = urljoin(PROTEINS_PLUS_URL, 'protoss/')
+PROTOSS_JOBS = urljoin(PROTEINS_PLUS_URL, 'protoss/jobs/')
+
+def poll_job(job_id, poll_url, poll_interval=1, max_polls=10):
+    """
+    Poll the progress of a job by continuously polling the server in regular intervals and updating the job information.
+
+    Args:
+        job_id (str): UUID of the job to poll.
+        poll_url (str): URL to send the polling request to.
+        poll_interval (int): Time interval between polls in seconds. Default is 1 second.
+        max_polls (int): Maximum number of times to poll before exiting. Default is 10.
+
+    Returns:
+        dict: Polled job information.
+    """
+    job = requests.get(poll_url + job_id + '/').json()
+    status = job['status']
+    current_poll = 0
+
+    while status == 'pending' or status == 'running':
+        print(f'Job {job_id} is {status}')
+        current_poll += 1
+
+        if current_poll >= max_polls:
+            print(f'Job {job_id} has not completed after {max_polls} polling requests and {poll_interval * max_polls} seconds')
+            return job
+
+        time.sleep(poll_interval)
+        job = requests.get(poll_url + job_id + '/').json()
+        status = job['status']
+
+    print(f'Job {job_id} completed with {status}')
+    return job
+
+def prepare_protein_protoss(receptor: Path, receptor_protoss: Path) -> Path:
+    """
+    Prepares a protein using ProtoSS.
+
+    Args:
+        receptor (Path): Path to the input protein file in PDB format.
+        receptor_protoss (Path): Path where the prepared protein file should be saved.
+
+    Returns:
+        Path: Path to the prepared protein file in PDB format.
+    """
+    print('Preparing protein with ProtoSS ...')
+
+    with open(receptor) as upload_file:
+        query = {'protein_file': upload_file}
+        job_submission = requests.post(PROTOSS, files=query).json()
+
+    protoss_job = poll_job(job_submission['job_id'], PROTOSS_JOBS)
+    protossed_protein = requests.get(PROTEINS + protoss_job['output_protein'] + '/').json()
+    protein_file = io.StringIO(protossed_protein['file_string'])
+    protein_structure = PDBParser().get_structure(protossed_protein['name'], protein_file)
+
+    with open(receptor_protoss, 'w') as output_file_handle:
+        pdbio = PDBIO()
+        pdbio.set_structure(protein_structure)
+        pdbio.save(output_file_handle)
+    
+    return receptor_protoss
+
+#################################################################################
+########################### CDPK Utilities ######################################
+#################################################################################
+
+def molsToFiles(mols: list[Chem.BasicMolecule], output_file: Path) -> None:
+    """
+    Writes a list of molecules to the specified output file.
+
+    Args:
+        mols (list): List of CDPKit molecules to write to the output file.
+        output_file (str): Path to the output file.
+    """
+    writer = Chem.MolecularGraphWriter(str(output_file))
+    for mol in mols:
+        writer.write(mol)
+    writer.close()
+
+def filesToMols(sdf_input: Path) -> List[Chem.BasicMolecule]:
+    """
+    Retrieves the structure data of each molecule in the provided SD file.
+
+    Args:
+        sdf_input (Path): Path to the input SD file.
+
+    Returns:
+        List[Chem.BasicMolecule]: List of parsed molecules.
+    """
+    reader = Chem.FileSDFMoleculeReader(str(sdf_input))
+    mol = Chem.BasicMolecule()
+    mols_list = []
+    
+    try:
+        while reader.read(mol):
+            try:
+                if not Chem.hasStructureData(mol):
+                    print('Error: no structure data available for molecule', Chem.getName(mol))
+                    continue
+                struct_data = Chem.getStructureData(mol)
+                new_mol = Chem.BasicMolecule(mol)
+                mols_list.append(new_mol)
+            except Exception:
+                pass
+    except Exception:
+        pass
+    
+    return mols_list
+
+def standardize(chembl_proc: Chem.ChEMBLStandardizer,
+                in_mol: Chem.Molecule, out_mol: Chem.Molecule,
+                proc_excluded: bool, extract_parent: bool) -> Chem.ChEMBLStandardizer.ChangeFlags:
+    """
+    Performs ChEMBL molecule standardization and parent structure extraction.
+
+    Args:
+        chembl_proc (Chem.ChEMBLStandardizer): Instance of the Chem.ChEMBLStandardizer class.
+        in_mol (Chem.Molecule): Input molecule to standardize.
+        out_mol (Chem.Molecule): Output molecule to store the standardized molecule.
+        proc_excluded (bool): If True, molecules flagged as excluded will be processed.
+        extract_parent (bool): If True, the parent structure will be extracted.
+
+    Returns:
+        Chem.ChEMBLStandardizer.ChangeFlags: Flags indicating the carried out modifications.
+    """
+    change_flags = chembl_proc.standardize(in_mol, out_mol, proc_excluded)
+
+    if extract_parent:
+        change_flags &= ~Chem.ChEMBLStandardizer.EXCLUDED
+        change_flags |= chembl_proc.getParent(out_mol)
+    return change_flags
+
+def getListOfChangesString(change_flags: Chem.ChEMBLStandardizer.ChangeFlags, verbose: bool = False) -> str:
+    """Returns a string listing the carried out modifications."""
+    if not verbose:
+        return None
+
+    changes = '   Carried out modifications:'
+    change_list = [
+        (Chem.ChEMBLStandardizer.EXPLICIT_HYDROGENS_REMOVED, 'Explicit hydrogens removed'),
+        (Chem.ChEMBLStandardizer.UNKNOWN_STEREO_STANDARDIZED, 'Undefined stereocenter information standardized'),
+        (Chem.ChEMBLStandardizer.BONDS_KEKULIZED, 'Kekule structure generated'),
+        (Chem.ChEMBLStandardizer.STRUCTURE_NORMALIZED, 'Functional groups normalized'),
+        (Chem.ChEMBLStandardizer.CHARGES_REMOVED, 'Number of charged atoms reduced'),
+        (Chem.ChEMBLStandardizer.TARTRATE_STEREO_CLEARED, 'Configuration of chiral tartrate atoms set to undefined'),
+        (Chem.ChEMBLStandardizer.STRUCTURE_2D_CORRECTED, '2D structure corrected'),
+        (Chem.ChEMBLStandardizer.ISOTOPE_INFO_CLEARED, 'Isotope information cleared'),
+        (Chem.ChEMBLStandardizer.SALT_COMPONENTS_REMOVED, 'Salt components removed'),
+        (Chem.ChEMBLStandardizer.SOLVENT_COMPONENTS_REMOVED, 'Solvent components removed'),
+        (Chem.ChEMBLStandardizer.DUPLICATE_COMPONENTS_REMOVED, 'Duplicate components removed')
+    ]
+
+    for flag, description in change_list:
+        if change_flags & flag:
+            changes += '\n    * ' + description
+
+    return changes
+
+def generate3dConformation(mol: Chem.Molecule, struct_gen: ConfGen.StructureGenerator) -> int:
+    """
+    Generates a low-energy 3D structure of the argument molecule.
+
+    Args:
+        mol (Chem.Molecule): Molecule to generate a 3D structure for.
+        struct_gen (ConfGen.StructureGenerator): Instance of the ConfGen.StructureGenerator class.
+
+    Returns:
+        int: Status code indicating the success of the 3D structure generation.
+    """
+    ConfGen.prepareForConformerGeneration(mol)
+    status = struct_gen.generate(mol)
+    
+    if status == ConfGen.ReturnCode.SUCCESS:
+        struct_gen.setCoordinates(mol)
+    
+    return status
+
+def stero_enumerator(input_sdf: Path, output_sdf: Path) -> Path:
+    """Enumerates stereoisomers for molecules in an SDF file."""
+    supplier = rdChem.SDMolSupplier(str(input_sdf))
+    writer = rdChem.SDWriter(str(output_sdf))
+    
+    opts = StereoEnumerationOptions(unique=True)
+    for mol in supplier:
+        init_name = mol.GetProp("_Name")
+        isomers: List[rdChem.Mol] = tuple(EnumerateStereoisomers(mol, options=opts))
+        for i, isomer in enumerate(isomers):
+            iso_name = init_name + "_Iso" + str(i)
+            isomer.SetProp("_Name", iso_name)
+            writer.write(isomer)
+    writer.close()
+
+    return output_sdf
+
+class CDPK_Runner:
+    """Class for running CDPK operations on molecules."""
+    
+    def __init__(self, standardize: bool = True, protonate: bool = True, gen3d: bool = True):
+        self.chembl_proc = Chem.ChEMBLStandardizer()
+        self.prot_state_gen = Chem.ProtonationStateStandardizer()
+        
+        self.standardize = standardize
+        self.protonate = protonate
+        self.gen3d = gen3d
+        
+    def prepare_ligands(self, input_sdf: Path, output_sdf: Path):
+        """Prepares ligands with standardization, protonation, and 3D generation as configured."""
+        mols: List[Chem.BasicMolecule] = filesToMols(input_sdf)
+        writer = Chem.MolecularGraphWriter(str(output_sdf))
+        
+        for mol in mols:
+            in_mol = mol
+            out_mol = Chem.BasicMolecule()
+            
+            if self.standardize:
+                change_flags = standardize(self.chembl_proc, in_mol, out_mol, True, True)
+                change_flags_str = getListOfChangesString(change_flags, verbose=True)
+            
+            if self.protonate:
+                self.prot_state_gen.standardize(out_mol, Chem.ProtonationStateStandardizer.PHYSIOLOGICAL_CONDITION_STATE)
+                Chem.perceiveComponents(out_mol, True)
+
+            if self.gen3d:
+                Chem.setMultiConfExportParameter(writer, False)
+                struct_gen = ConfGen.StructureGenerator()
+                status = generate3dConformation(out_mol, struct_gen)
+                if status == ConfGen.ReturnCode.SUCCESS:
+                    Chem.setMDLDimensionality(out_mol, 3)
+        
+            writer.write(out_mol)
+        
+        writer.close()
+
+#################################################################################
+########################### Logging Setup #######################################
+#################################################################################
+
 logging.basicConfig(level=logging.DEBUG,
                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                     handlers=[
@@ -29,56 +282,9 @@ logging.basicConfig(level=logging.DEBUG,
                     ])
 logger = logging.getLogger(__name__)
 
-
-# %%
-# def openeye_fixer(oemol, explicit_H=True, protonation=False):
-#     to_edit = oechem.OEGraphMol(oemol)
-
-#     # oechem.OEDetermineConnectivity(to_edit)
-#     # oechem.OEFindRingAtomsAndBonds(to_edit)
-#     # oechem.OEPerceiveBondOrders(to_edit)
-#     # oechem.OEAssignImplicitHydrogens(to_edit)
-#     # oechem.OEAssignFormalCharges(to_edit)
-#     oechem.OEClearAromaticFlags(to_edit)
-
-#     oechem.OEAssignAromaticFlags(to_edit)
-#     for bond in to_edit.GetBonds():
-#         if bond.IsAromatic():
-#             bond.SetIntType(5)
-#         elif bond.GetOrder() != 0:
-#             bond.SetIntType(bond.GetOrder())
-#         else:
-#             bond.SetIntType(1)
-
-#     oechem.OEKekulize(to_edit)
-
-#     if explicit_H:
-#         oechem.OEAddExplicitHydrogens(to_edit)
-#         if protonation == True:
-#             oequacpac.OEGetReasonableProtomer(to_edit)
-
-#     return oechem.OEGraphMol(to_edit)
-
-# def openeye_gen3d(smile) -> Path:
-#     oemol = oechem.OEMol()
-#     oechem.OESmilesToMol(oemol, smile)
-
-#     # Generate 3D coordinates
-#     builder = oeomega.OEConformerBuilder()
-#     ret_code = builder.Build(oemol)
-
-#     tmp_save = Path(gettempdir()) / "smiles_3d.sdf"
-#     ofs = oechem.oemolostream(tmp_save.as_posix())
-#     oechem.OEWriteMolecule(ofs, oechem.OEGraphMol(oemol))
-
-#     return tmp_save
-
-# def openeye_converter(input_file: Path, output_file: Path):
-#     ifs = oechem.oemolistream()
-#     ofs = oechem.oemolostream(str(output_file))
-#     if ifs.open(str(input_file)):
-#         for oemol in ifs.GetOEGraphMols():
-#             oechem.OEWriteMolecule(ofs, oemol)
+#################################################################################
+########################### Plants Docking ######################################
+#################################################################################
 
 class Plants_Docking:
     def __init__(self, protein_pdb: Path, input_ligands: Union[Path, str]):
@@ -220,8 +426,10 @@ cluster_rmsd 1.0
         self._retrieve_docked_ligands()
         return
 
+#################################################################################
+########################### Pymol Docking #######################################
+#################################################################################
 
-# %%
 class Pymol_Docking:
     def __init__(self, protein_pdb: str, input_ligands: str):
         self.workdir: Path = Path(os.getcwd())
@@ -238,39 +446,17 @@ class Pymol_Docking:
     def prepare_protein(self) -> Path:
         protein_basename: str = self.protein_pdb.stem
         protein_PREP: Path = self.workdir / f"{protein_basename}_PREP.pdb"
-
-        fixer = PDBFixer(filename=str(self.protein_pdb))
-        fixer.removeHeterogens(keepWater=False)
-        fixer.findMissingResidues()
-        fixer.findMissingAtoms()
-        fixer.findNonstandardResidues()
-
-        fixer.addMissingAtoms()
-        fixer.addMissingHydrogens(7.4)
-
-        PDBFile.writeFile(fixer.topology, fixer.positions, open(protein_PREP.as_posix(), 'w'))
+        
+        prepare_protein_protoss(self.protein_pdb, protein_PREP)
+        
         return protein_PREP
 
-    # @staticmethod
-    # def fix_3d_mol(sdf_file: Path, TMP_basename: str) -> Path:
-    #     TMP_fixed_sdf = Path(gettempdir()) / f"{TMP_basename}_fixed.sdf"
-
-    #     ifs = oechem.oemolistream()
-    #     ofs = oechem.oemolostream(TMP_fixed_sdf.as_posix())
-
-    #     ifs.open(sdf_file.as_posix())
-    #     for oemol in ifs.GetOEGraphMols():
-    #         fixed_oemol = openeye_fixer(oemol)
-    #         oechem.OEWriteMolecule(ofs, fixed_oemol)
-
-    #     return TMP_fixed_sdf.resolve()
-    
     @staticmethod
     def cdpk_fixer(input_sdf: Path, TMP_basename: str) -> None:
         TMP_fixed_sdf = Path(gettempdir()) / "TMP_fixed.sdf"
         
-        supplier = Chem.SDMolSupplier(input_sdf.as_posix())
-        writer = Chem.SDWriter(TMP_fixed_sdf.as_posix())
+        supplier = rdChem.SDMolSupplier(input_sdf.as_posix())
+        writer = rdChem.SDWriter(TMP_fixed_sdf.as_posix())
         for mol in supplier:
             mol.SetProp("_Name", TMP_basename)
             writer.write(mol)
@@ -284,28 +470,22 @@ class Pymol_Docking:
     def prepare_ligands(self):
         if self.input_mode == "SDF":
             logger.info("Preparing ligands from SDF")
-            # Self Crystal_sdf and Self ligands_df --> Get a Path, return a (Path, Path)
             fixed_crystal = self.crystal_sdf.resolve()
             fixed_ligands = self.cdpk_fixer(self.ligands_sdf, "ligand")
 
             return fixed_ligands.resolve(), fixed_crystal.resolve()
-
-    # def prepare_ligands(self):
-    #     if self.input_mode == "SDF":
-    #         logger.info("Preparing ligands from SDF")
-    #         fixed_crystal: Path = self.fix_3d_mol(self.crystal_sdf, "crystal")
-    #         fixed_ligands: Path = self.fix_3d_mol(self.ligands_sdf, "ligand")
-
-    #         return fixed_ligands.resolve(), fixed_crystal.resolve()
-
-    #     elif self.input_mode == "SMILES":
-    #         logger.info("Preparing ligands from SMILES")
-    #         fixed_crystal: Path = self.fix_3d_mol(self.crystal_sdf, "crystal")
-    #         smiles_3d: Path = openeye_gen3d(self.ligands_smiles)
-    #         fixed_ligands: Path = self.fix_3d_mol(smiles_3d, "ligand")
-
-    #         return fixed_ligands.resolve(), fixed_crystal.resolve()
-
+        
+        elif self.input_mode == "SMILES":
+            TMP_SMILES_SDF = Path(gettempdir()) / "TMP_SMILES.sdf"
+            mol = dm.to_mol(self.ligands_smiles, sanitize=True, kekulize=True)
+            mol.SetProp("_Name", "ligand")
+            dm.to_sdf(mol, TMP_SMILES_SDF)
+            
+            fixed_crystal = self.crystal_sdf.resolve()
+            fixed_ligands = self.cdpk_fixer(TMP_SMILES_SDF, "ligand")
+            
+            return fixed_ligands.resolve(), fixed_crystal.resolve()
+            
     def run_smina_docking(self, mode: str, docking_basename: str) -> Path:
         # Fix the protein
         print("Running protein preparation")
