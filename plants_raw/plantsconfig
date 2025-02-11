@@ -1,0 +1,20 @@
+### PLANTS configuration file
+# scoring function and search settings
+scoring_function chemplp
+search_speed speed1
+
+# input
+protein_file /mnt/d/Pymol_Docking/LAC3_PREP.mol2
+ligand_file /tmp/ligand_prepared.mol2
+
+# output
+output_dir plants_raw
+write_multi_mol2 1
+
+# binding site definition
+bindingsite_center 59.4219 30.5525 30.3046
+bindingsite_radius 6.59116
+
+# cluster algorithm
+cluster_structures 10
+cluster_rmsd 1.0

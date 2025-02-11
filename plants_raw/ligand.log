@@ -1,0 +1,68 @@
+
+
+                  PLANTS
+        Protein-Ligand ANT System
+               version 1.2
+
+
+author: Oliver Korb
+
+scientific contributors: T.E. Exner, T. Stuetzle
+
+contact: Oliver.Korb@uni-konstanz.de
+
+
+
+-------------------------------------------------------------
+Ligand data file: /tmp/ligand_prepared.mol2 (entry 1)
+-------------------------------------------------------------
+
+
+Input molecule: /tmp/ligand_prepared.mol2
+Description: ligand
+
+
+Ligand rotatable bonds (0): 
+
+
+Ligand formal charge table:
+Ligand formal charge: 0.00
+
+
+Atom type assignment for partial score term CHEMPLP-PLP:
+
+NONPOLAR(6): 
+    C(   1)          C(   2)          C(   3)          C(   4)          C(   5)          C(   6)      
+
+Atom type assignment for partial score term CHEM-HB:
+
+NONPOLAR(6): 
+    C(   1)          C(   2)          C(   3)          C(   4)          C(   5)          C(   6)      
+
+Intra-ligand score: CLASH2
+Ligand clash pairs: 0
+
+Ligand torsions: 0 (0 parameters matched)
+
+Ligand input conformation score: 4771.72
+
+PLPtotal,PLPparthbond,PLPpartsteric,PLPpartmetal,PLPpartrepulsive,PLPpartburpolar,LIG_NUM_CLASH,LIG_NUM_CONTACT,LIG_NUM_NO_CONTACT,CHEMpartmetal,CHEMparthbond,CHEMparthbondCHO,DON,ACC,UNUSED_DON,UNUSED_ACC,CHEMPLP_CLASH2,TRIPOS_TORS
+
+0,0,0,0,0,0,0,0,6,0,0,0,0,0,0,0,0,0
+
+ACO iterations 81  time 0.05s  evaluations 177125
+
+Cluster time 0.00s (max. 10 structures, RMSD similarity 1.00 A):
+
+rank  1  score   -44.26  file ligand_entry_00001_conf_01
+rank  2  score   -44.25  file ligand_entry_00001_conf_02
+rank  3  score   -44.22  file ligand_entry_00001_conf_03
+rank  4  score   -44.13  file ligand_entry_00001_conf_04
+rank  5  score   -44.05  file ligand_entry_00001_conf_05
+rank  6  score   -44.02  file ligand_entry_00001_conf_06
+rank  7  score   -43.99  file ligand_entry_00001_conf_07
+rank  8  score   -43.92  file ligand_entry_00001_conf_08
+rank  9  score   -43.85  file ligand_entry_00001_conf_09
+rank 10  score   -43.35  file ligand_entry_00001_conf_10
+
+

@@ -21,6 +21,8 @@ from Bio.PDB import PDBParser
 from Bio.PDB.PDBIO import PDBIO
 import CDPL.Chem as Chem
 import CDPL.ConfGen as ConfGen
+from pdbfixer import PDBFixer
+from openmm.app import PDBFile
 
 # Suppress warnings
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -332,41 +334,71 @@ class Plants_Docking:
         return protein_PREP
 
     @staticmethod
-    def fix_3d_mol(sdf_file: Path, TMP_basename: str) -> Path:
-        TMP_fixed_sdf = Path(gettempdir()) / f"{TMP_basename}_fixed.mol2"
-
-        ifs = oechem.oemolistream()
-        ofs = oechem.oemolostream(TMP_fixed_sdf.as_posix())
-
-        ifs.open(sdf_file.as_posix())
-        for oemol in ifs.GetOEGraphMols():
-            fixed_oemol = openeye_fixer(oemol)
-            oechem.OEWriteMolecule(ofs, fixed_oemol)
-
+    def cdpk_fixer(input_sdf: Path, TMP_basename: str) -> Path:
+        TMP_fixed_sdf = Path(gettempdir()) / "TMP_fixed.sdf"
+        
+        supplier = rdChem.SDMolSupplier(input_sdf.as_posix())
+        writer = rdChem.SDWriter(TMP_fixed_sdf.as_posix())
+        for mol in supplier:
+            mol.SetProp("_Name", TMP_basename)
+            writer.write(mol)
+        writer.close()
+        
+        cdpk_runner = CDPK_Runner(standardize=True, protonate=True, gen3d=True)
+        cdpk_runner.prepare_ligands(TMP_fixed_sdf, TMP_fixed_sdf)
+        
         return TMP_fixed_sdf.resolve()
+
+    def _convert_to_mol2(self, input_sdf: Path) -> Path:
+        """Convert prepared SDF file to MOL2 format required by PLANTS."""
+        tmp_mol2 = Path(gettempdir()) / "ligand_prepared.mol2"
+        
+        # Read the first molecule from SDF and write as MOL2
+        mol = next(pybel.readfile("sdf", str(input_sdf)))
+        mol.write("mol2", str(tmp_mol2), overwrite=True)
+        
+        return tmp_mol2
 
     def prepare_ligands(self):
         if self.input_mode == "SDF":
             logger.info("Preparing ligands from SDF")
-            fixed_crystal: Path = self.fix_3d_mol(self.crystal_sdf, "crystal")
-            fixed_ligands: Path = self.fix_3d_mol(self.input_ligands, "ligand")
+            # First prepare using CDPK (in SDF format)
+            fixed_ligands_sdf = self.cdpk_fixer(self.input_ligands, "ligand")
+            # Convert to MOL2 for PLANTS
+            fixed_ligands_mol2 = self._convert_to_mol2(fixed_ligands_sdf)
+            
+            # Convert crystal to MOL2 as well
+            crystal_mol2 = Path(gettempdir()) / "crystal.mol2"
+            crystal = next(pybel.readfile("sdf", str(self.crystal_sdf)))
+            crystal.write("mol2", str(crystal_mol2), overwrite=True)
 
-            return fixed_ligands.resolve(), fixed_crystal.resolve()
+            return fixed_ligands_mol2, crystal_mol2
 
         elif self.input_mode == "SMILES":
             logger.info("Preparing ligands from SMILES")
-            fixed_crystal: Path = self.fix_3d_mol(self.crystal_sdf, "crystal")
-            smiles_3d: Path = openeye_gen3d(self.ligands_smiles)
-            fixed_ligands: Path = self.fix_3d_mol(smiles_3d, "ligand")
-
-            return fixed_ligands.resolve(), fixed_crystal.resolve()
+            # Convert SMILES to temporary SDF
+            TMP_SMILES_SDF = Path(gettempdir()) / "TMP_SMILES.sdf"
+            mol = dm.to_mol(self.ligands_smiles, sanitize=True, kekulize=True)
+            mol.SetProp("_Name", "ligand")
+            dm.to_sdf(mol, TMP_SMILES_SDF)
+            
+            # Prepare using CDPK
+            fixed_ligands_sdf = self.cdpk_fixer(TMP_SMILES_SDF, "ligand")
+            # Convert to MOL2 for PLANTS
+            fixed_ligands_mol2 = self._convert_to_mol2(fixed_ligands_sdf)
+            
+            # Convert crystal to MOL2
+            crystal_mol2 = Path(gettempdir()) / "crystal.mol2"
+            crystal = next(pybel.readfile("sdf", str(self.crystal_sdf)))
+            crystal.write("mol2", str(crystal_mol2), overwrite=True)
+            
+            return fixed_ligands_mol2, crystal_mol2
 
     def _define_binding_site(self):
-        # temp convert the crystal.sdf to mol2
-        tmp_crystal: Path = Path(gettempdir()) / "tmp.mol2"
-        openeye_converter(self.crystal_sdf, tmp_crystal)
+        # Use the MOL2 crystal file directly
+        _, crystal_mol2 = self.prepare_ligands()
 
-        plants_command = f"plants.64bit --mode bind {str(tmp_crystal)} {str(self.protein_PREP)}"
+        plants_command = f"plants.64bit --mode bind {str(crystal_mol2)} {str(self.protein_PREP)}"
         print(plants_command)
 
         box_res = subprocess.run(plants_command, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
