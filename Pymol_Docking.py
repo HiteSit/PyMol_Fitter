@@ -467,6 +467,8 @@ class Pymol_Docking:
         self.workdir: Path = Path(os.getcwd())
         self.protein_pdb: Path = Path(protein_pdb)
         self.crystal_sdf: Path = Path("Crystal.sdf")
+        
+        self.protein_preared = None
 
         if os.path.exists(input_ligands):
             self.ligands_sdf: Path = Path(input_ligands)
@@ -481,6 +483,7 @@ class Pymol_Docking:
         
         prepare_protein_protoss(self.protein_pdb, protein_PREP)
         
+        self.protein_preared = protein_PREP
         return protein_PREP
 
     @staticmethod
@@ -517,6 +520,33 @@ class Pymol_Docking:
             fixed_ligands = self.cdpk_fixer(TMP_SMILES_SDF, "ligand")
             
             return fixed_ligands.resolve(), fixed_crystal.resolve()
+        
+    @staticmethod
+    def pose_buster_processer(mol_pred: Path, mol_crystal: Path, mol_prot: Path):
+        from posebusters import PoseBusters
+        buster = PoseBusters()
+        df = buster.bust(mol_pred, mol_crystal, mol_prot)
+        df.reset_index(drop=False, inplace=True)
+        bool_columns = df.select_dtypes(include=[bool]).columns
+        success_rate_series = df[bool_columns].mean(axis=1) * 100
+        success_rate_list = success_rate_series.tolist()
+        
+        # Read all molecules first
+        mol_list = list(rdChem.SDMolSupplier(mol_pred.as_posix()))
+        
+        # Create a temporary file path
+        temp_path = mol_pred.parent / f"temp_{mol_pred.name}"
+        
+        # Write to temporary file
+        with rdChem.SDWriter(temp_path.as_posix()) as writer:
+            for pose, success_rate in zip(mol_list, success_rate_list):
+                pose.SetProp("Compliance", str(success_rate))  # Convert to string
+                writer.write(pose)
+        
+        # Replace original file with temporary file
+        temp_path.replace(mol_pred)
+        
+        return mol_pred
             
     def run_smina_docking(self, mode: str, docking_basename: str) -> Path:
         # Fix the protein
@@ -557,8 +587,11 @@ class Pymol_Docking:
             print("Running docking")
             with open(smina_log, "w") as log_file:
                 subprocess.run(smina_lst, check=True, stdout=log_file, stderr=log_file)
-
-        return smina_output
+        
+        logger.info("Running pose buster")
+        smina_bustered = self.pose_buster_processer(smina_output, fixed_crystal, protein_PKA)
+        
+        return smina_bustered
 
 def assert_organic(selection):
     """
