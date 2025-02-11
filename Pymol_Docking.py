@@ -17,6 +17,9 @@ from pdbfixer import PDBFixer
 from pymol import cmd
 
 from openbabel import pybel
+from rdkit import Chem
+
+from src.CDPK_Utils import CDPK_Runner
 
 # %%
 logging.basicConfig(level=logging.DEBUG,
@@ -28,54 +31,54 @@ logger = logging.getLogger(__name__)
 
 
 # %%
-def openeye_fixer(oemol, explicit_H=True, protonation=False):
-    to_edit = oechem.OEGraphMol(oemol)
+# def openeye_fixer(oemol, explicit_H=True, protonation=False):
+#     to_edit = oechem.OEGraphMol(oemol)
 
-    # oechem.OEDetermineConnectivity(to_edit)
-    # oechem.OEFindRingAtomsAndBonds(to_edit)
-    # oechem.OEPerceiveBondOrders(to_edit)
-    # oechem.OEAssignImplicitHydrogens(to_edit)
-    # oechem.OEAssignFormalCharges(to_edit)
-    oechem.OEClearAromaticFlags(to_edit)
+#     # oechem.OEDetermineConnectivity(to_edit)
+#     # oechem.OEFindRingAtomsAndBonds(to_edit)
+#     # oechem.OEPerceiveBondOrders(to_edit)
+#     # oechem.OEAssignImplicitHydrogens(to_edit)
+#     # oechem.OEAssignFormalCharges(to_edit)
+#     oechem.OEClearAromaticFlags(to_edit)
 
-    oechem.OEAssignAromaticFlags(to_edit)
-    for bond in to_edit.GetBonds():
-        if bond.IsAromatic():
-            bond.SetIntType(5)
-        elif bond.GetOrder() != 0:
-            bond.SetIntType(bond.GetOrder())
-        else:
-            bond.SetIntType(1)
+#     oechem.OEAssignAromaticFlags(to_edit)
+#     for bond in to_edit.GetBonds():
+#         if bond.IsAromatic():
+#             bond.SetIntType(5)
+#         elif bond.GetOrder() != 0:
+#             bond.SetIntType(bond.GetOrder())
+#         else:
+#             bond.SetIntType(1)
 
-    oechem.OEKekulize(to_edit)
+#     oechem.OEKekulize(to_edit)
 
-    if explicit_H:
-        oechem.OEAddExplicitHydrogens(to_edit)
-        if protonation == True:
-            oequacpac.OEGetReasonableProtomer(to_edit)
+#     if explicit_H:
+#         oechem.OEAddExplicitHydrogens(to_edit)
+#         if protonation == True:
+#             oequacpac.OEGetReasonableProtomer(to_edit)
 
-    return oechem.OEGraphMol(to_edit)
+#     return oechem.OEGraphMol(to_edit)
 
-def openeye_gen3d(smile) -> Path:
-    oemol = oechem.OEMol()
-    oechem.OESmilesToMol(oemol, smile)
+# def openeye_gen3d(smile) -> Path:
+#     oemol = oechem.OEMol()
+#     oechem.OESmilesToMol(oemol, smile)
 
-    # Generate 3D coordinates
-    builder = oeomega.OEConformerBuilder()
-    ret_code = builder.Build(oemol)
+#     # Generate 3D coordinates
+#     builder = oeomega.OEConformerBuilder()
+#     ret_code = builder.Build(oemol)
 
-    tmp_save = Path(gettempdir()) / "smiles_3d.sdf"
-    ofs = oechem.oemolostream(tmp_save.as_posix())
-    oechem.OEWriteMolecule(ofs, oechem.OEGraphMol(oemol))
+#     tmp_save = Path(gettempdir()) / "smiles_3d.sdf"
+#     ofs = oechem.oemolostream(tmp_save.as_posix())
+#     oechem.OEWriteMolecule(ofs, oechem.OEGraphMol(oemol))
 
-    return tmp_save
+#     return tmp_save
 
-def openeye_converter(input_file: Path, output_file: Path):
-    ifs = oechem.oemolistream()
-    ofs = oechem.oemolostream(str(output_file))
-    if ifs.open(str(input_file)):
-        for oemol in ifs.GetOEGraphMols():
-            oechem.OEWriteMolecule(ofs, oemol)
+# def openeye_converter(input_file: Path, output_file: Path):
+#     ifs = oechem.oemolistream()
+#     ofs = oechem.oemolostream(str(output_file))
+#     if ifs.open(str(input_file)):
+#         for oemol in ifs.GetOEGraphMols():
+#             oechem.OEWriteMolecule(ofs, oemol)
 
 class Plants_Docking:
     def __init__(self, protein_pdb: Path, input_ligands: Union[Path, str]):
@@ -248,35 +251,60 @@ class Pymol_Docking:
         PDBFile.writeFile(fixer.topology, fixer.positions, open(protein_PREP.as_posix(), 'w'))
         return protein_PREP
 
+    # @staticmethod
+    # def fix_3d_mol(sdf_file: Path, TMP_basename: str) -> Path:
+    #     TMP_fixed_sdf = Path(gettempdir()) / f"{TMP_basename}_fixed.sdf"
+
+    #     ifs = oechem.oemolistream()
+    #     ofs = oechem.oemolostream(TMP_fixed_sdf.as_posix())
+
+    #     ifs.open(sdf_file.as_posix())
+    #     for oemol in ifs.GetOEGraphMols():
+    #         fixed_oemol = openeye_fixer(oemol)
+    #         oechem.OEWriteMolecule(ofs, fixed_oemol)
+
+    #     return TMP_fixed_sdf.resolve()
+    
     @staticmethod
-    def fix_3d_mol(sdf_file: Path, TMP_basename: str) -> Path:
-        TMP_fixed_sdf = Path(gettempdir()) / f"{TMP_basename}_fixed.sdf"
-
-        ifs = oechem.oemolistream()
-        ofs = oechem.oemolostream(TMP_fixed_sdf.as_posix())
-
-        ifs.open(sdf_file.as_posix())
-        for oemol in ifs.GetOEGraphMols():
-            fixed_oemol = openeye_fixer(oemol)
-            oechem.OEWriteMolecule(ofs, fixed_oemol)
-
+    def cdpk_fixer(input_sdf: Path, TMP_basename: str) -> None:
+        TMP_fixed_sdf = Path(gettempdir()) / "TMP_fixed.sdf"
+        
+        supplier = Chem.SDMolSupplier(input_sdf.as_posix())
+        writer = Chem.SDWriter(TMP_fixed_sdf.as_posix())
+        for mol in supplier:
+            mol.SetProp("_Name", TMP_basename)
+            writer.write(mol)
+        writer.close()
+        
+        cdpk_runner = CDPK_Runner(standardize=True, protonate=True, gen3d=True)
+        cdpk_runner.prepare_ligands(TMP_fixed_sdf, TMP_fixed_sdf)
+        
         return TMP_fixed_sdf.resolve()
-
+    
     def prepare_ligands(self):
         if self.input_mode == "SDF":
             logger.info("Preparing ligands from SDF")
-            fixed_crystal: Path = self.fix_3d_mol(self.crystal_sdf, "crystal")
-            fixed_ligands: Path = self.fix_3d_mol(self.ligands_sdf, "ligand")
+            # Self Crystal_sdf and Self ligands_df --> Get a Path, return a (Path, Path)
+            fixed_crystal = self.crystal_sdf.resolve()
+            fixed_ligands = self.cdpk_fixer(self.ligands_sdf, "ligand")
 
             return fixed_ligands.resolve(), fixed_crystal.resolve()
 
-        elif self.input_mode == "SMILES":
-            logger.info("Preparing ligands from SMILES")
-            fixed_crystal: Path = self.fix_3d_mol(self.crystal_sdf, "crystal")
-            smiles_3d: Path = openeye_gen3d(self.ligands_smiles)
-            fixed_ligands: Path = self.fix_3d_mol(smiles_3d, "ligand")
+    # def prepare_ligands(self):
+    #     if self.input_mode == "SDF":
+    #         logger.info("Preparing ligands from SDF")
+    #         fixed_crystal: Path = self.fix_3d_mol(self.crystal_sdf, "crystal")
+    #         fixed_ligands: Path = self.fix_3d_mol(self.ligands_sdf, "ligand")
 
-            return fixed_ligands.resolve(), fixed_crystal.resolve()
+    #         return fixed_ligands.resolve(), fixed_crystal.resolve()
+
+    #     elif self.input_mode == "SMILES":
+    #         logger.info("Preparing ligands from SMILES")
+    #         fixed_crystal: Path = self.fix_3d_mol(self.crystal_sdf, "crystal")
+    #         smiles_3d: Path = openeye_gen3d(self.ligands_smiles)
+    #         fixed_ligands: Path = self.fix_3d_mol(smiles_3d, "ligand")
+
+    #         return fixed_ligands.resolve(), fixed_crystal.resolve()
 
     def run_smina_docking(self, mode: str, docking_basename: str) -> Path:
         # Fix the protein
@@ -296,7 +324,7 @@ class Pymol_Docking:
                 "-r", protein_PKA.as_posix(),
                 "-l", fixed_ligands.as_posix(),
                 "--autobox_ligand", fixed_crystal.as_posix(),
-                "-o", smina_output,
+                "-o", str(smina_output),
                 "--exhaustiveness", "32"
             ]
 
