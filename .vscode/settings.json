@@ -10,8 +10,6 @@
         "**/env",           // Excludes a directory named "env" (common for virtual environments).
         "**/venv",          // Excludes a directory named "venv" (common for virtual environments).
         "**/.idea",
-        "**/0_DataAPI",
-        "**/0_Migration",
     ],
 
     // Disable indexing for workspace & third-party libraries
