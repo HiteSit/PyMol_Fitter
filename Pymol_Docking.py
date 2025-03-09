@@ -29,7 +29,7 @@ warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 #################################################################################
-########################### Protein Preparation Utilities ########################
+########################### Protein Preparation Utilities #######################
 #################################################################################
 
 # ProteinsPlus API endpoints
