@@ -35,7 +35,8 @@ def dock():
         "ligand": "either_base64_encoded_sdf_or_smiles_string",
         "is_smiles": true/false,
         "dock_mode": "Dock" or "Minimize",
-        "output_name": "output_prefix"
+        "output_name": "output_prefix",
+        "crystal_sdf": "optional_base64_encoded_sdf_file"
     }
     
     Returns:
@@ -59,6 +60,7 @@ def dock():
         is_smiles = data.get("is_smiles", False)
         dock_mode = data.get("dock_mode", "Dock")
         output_name = data.get("output_name", "docked")
+        crystal_sdf_data = data.get("crystal_sdf")
         
         if not protein_data:
             return jsonify({"success": False, "message": "No protein data provided"}), 400
@@ -91,8 +93,18 @@ def dock():
             # Create output paths
             output_path = temp_dir_path / f"{output_name}.sdf"
             
+            # Handle crystal SDF if provided
+            crystal_sdf_path = None
+            if crystal_sdf_data:
+                crystal_sdf_path = temp_dir_path / "crystal.sdf"
+                if crystal_sdf_data.startswith("data:"):
+                    crystal_sdf_data = crystal_sdf_data.split(",")[1]
+                with open(crystal_sdf_path, "wb") as f:
+                    f.write(base64.b64decode(crystal_sdf_data))
+            
             # Initialize Pymol_Docking
-            docking = Pymol_Docking(str(protein_path), ligand_input)
+            docking = Pymol_Docking(str(protein_path), ligand_input, 
+                                  str(crystal_sdf_path) if crystal_sdf_path else None)
             
             # Run docking
             docked_path, protein_prep_path = docking.run_smina_docking(dock_mode, output_name)
@@ -124,7 +136,8 @@ def minimize_complex():
     {
         "protein": "base64_encoded_pdb_file",
         "ligand": "base64_encoded_sdf_file",
-        "output_name": "output_prefix"
+        "output_name": "output_prefix",
+        "crystal_sdf": "optional_base64_encoded_sdf_file"
     }
     
     Returns:
@@ -145,6 +158,7 @@ def minimize_complex():
         protein_data = data.get("protein")
         ligand_data = data.get("ligand")
         output_name = data.get("output_name", "minimized")
+        crystal_sdf_data = data.get("crystal_sdf")
         
         if not protein_data:
             return jsonify({"success": False, "message": "No protein data provided"}), 400
@@ -169,8 +183,18 @@ def minimize_complex():
             with open(ligand_path, "wb") as f:
                 f.write(base64.b64decode(ligand_data))
             
+            # Handle crystal SDF if provided
+            crystal_sdf_path = None
+            if crystal_sdf_data:
+                crystal_sdf_path = temp_dir_path / "crystal.sdf"
+                if crystal_sdf_data.startswith("data:"):
+                    crystal_sdf_data = crystal_sdf_data.split(",")[1]
+                with open(crystal_sdf_path, "wb") as f:
+                    f.write(base64.b64decode(crystal_sdf_data))
+            
             # Initialize Pymol_Docking
-            docking = Pymol_Docking(str(protein_path), str(ligand_path))
+            docking = Pymol_Docking(str(protein_path), str(ligand_path),
+                                   str(crystal_sdf_path) if crystal_sdf_path else None)
             
             # Run complex minimization
             minimized_complex_path = docking.run_complex_minimization(protein_path, ligand_path)
@@ -200,7 +224,8 @@ def dock_and_minimize():
         "ligand": "either_base64_encoded_sdf_or_smiles_string",
         "is_smiles": true/false,
         "dock_mode": "Dock" or "Minimize",
-        "output_name": "output_prefix"
+        "output_name": "output_prefix",
+        "crystal_sdf": "optional_base64_encoded_sdf_file"
     }
     
     Returns:
@@ -225,6 +250,7 @@ def dock_and_minimize():
         is_smiles = data.get("is_smiles", False)
         dock_mode = data.get("dock_mode", "Dock")
         output_name = data.get("output_name", "docked")
+        crystal_sdf_data = data.get("crystal_sdf")
         
         if not protein_data:
             return jsonify({"success": False, "message": "No protein data provided"}), 400
@@ -253,8 +279,18 @@ def dock_and_minimize():
                     f.write(base64.b64decode(ligand_data))
                 ligand_input = str(ligand_path)
             
+            # Handle crystal SDF if provided
+            crystal_sdf_path = None
+            if crystal_sdf_data:
+                crystal_sdf_path = temp_dir_path / "crystal.sdf"
+                if crystal_sdf_data.startswith("data:"):
+                    crystal_sdf_data = crystal_sdf_data.split(",")[1]
+                with open(crystal_sdf_path, "wb") as f:
+                    f.write(base64.b64decode(crystal_sdf_data))
+            
             # Initialize Pymol_Docking
-            docking = Pymol_Docking(str(protein_path), ligand_input)
+            docking = Pymol_Docking(str(protein_path), ligand_input,
+                                   str(crystal_sdf_path) if crystal_sdf_path else None)
             
             # Run docking
             docked_path, protein_prep_path = docking.run_smina_docking(dock_mode, output_name)

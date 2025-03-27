@@ -82,7 +82,8 @@ class PyMOLDockingClient:
              is_smiles: bool = False,
              dock_mode: str = "Dock",
              output_name: str = "docked",
-             output_dir: Union[str, Path] = ".") -> Dict[str, Path]:
+             output_dir: Union[str, Path] = ".",
+             crystal_file: Optional[Union[str, Path]] = None) -> Dict[str, Path]:
         """
         Perform docking of a ligand against a protein.
         
@@ -100,6 +101,8 @@ class PyMOLDockingClient:
             Base name for the output files, default is "docked"
         output_dir : Union[str, Path]
             Directory to save the output files, default is current directory
+        crystal_file : Optional[Union[str, Path]]
+            Path to the crystal ligand SDF file for defining the binding site, default is None
             
         Returns:
         --------
@@ -129,6 +132,10 @@ class PyMOLDockingClient:
             "dock_mode": dock_mode,
             "output_name": output_name
         }
+        
+        # Add crystal data if provided
+        if crystal_file:
+            payload["crystal_sdf"] = self._encode_file(crystal_file)
         
         # Make the API call
         response = requests.post(f"{self.base_url}/dock", json=payload)
@@ -161,7 +168,8 @@ class PyMOLDockingClient:
                         protein_file: Union[str, Path], 
                         ligand_file: Union[str, Path],
                         output_name: str = "minimized",
-                        output_dir: Union[str, Path] = ".") -> Dict[str, Path]:
+                        output_dir: Union[str, Path] = ".",
+                        crystal_file: Optional[Union[str, Path]] = None) -> Dict[str, Path]:
         """
         Perform minimization of a protein-ligand complex.
         
@@ -175,6 +183,8 @@ class PyMOLDockingClient:
             Base name for the output files, default is "minimized"
         output_dir : Union[str, Path]
             Directory to save the output files, default is current directory
+        crystal_file : Optional[Union[str, Path]]
+            Path to the crystal ligand SDF file for reference, default is None
             
         Returns:
         --------
@@ -195,6 +205,10 @@ class PyMOLDockingClient:
             "ligand": ligand_data,
             "output_name": output_name
         }
+        
+        # Add crystal data if provided
+        if crystal_file:
+            payload["crystal_sdf"] = self._encode_file(crystal_file)
         
         # Make the API call
         response = requests.post(f"{self.base_url}/minimize_complex", json=payload)
@@ -223,7 +237,8 @@ class PyMOLDockingClient:
                          is_smiles: bool = False,
                          dock_mode: str = "Dock",
                          output_name: str = "docked",
-                         output_dir: Union[str, Path] = ".") -> Dict[str, Path]:
+                         output_dir: Union[str, Path] = ".",
+                         crystal_file: Optional[Union[str, Path]] = None) -> Dict[str, Path]:
         """
         Perform docking of a ligand against a protein followed by minimization of the complex.
         
@@ -241,6 +256,8 @@ class PyMOLDockingClient:
             Base name for the output files, default is "docked"
         output_dir : Union[str, Path]
             Directory to save the output files, default is current directory
+        crystal_file : Optional[Union[str, Path]]
+            Path to the crystal ligand SDF file for defining the binding site, default is None
             
         Returns:
         --------
@@ -271,6 +288,10 @@ class PyMOLDockingClient:
             "dock_mode": dock_mode,
             "output_name": output_name
         }
+        
+        # Add crystal data if provided
+        if crystal_file:
+            payload["crystal_sdf"] = self._encode_file(crystal_file)
         
         # Make the API call
         response = requests.post(f"{self.base_url}/dock_and_minimize", json=payload)
