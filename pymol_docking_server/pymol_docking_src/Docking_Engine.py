@@ -42,10 +42,13 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 class Pymol_Docking:
-    def __init__(self, protein_pdb: str, input_ligands: str):
+    def __init__(self, protein_pdb: str, input_ligands: str, crystal_sdf: Optional[str] = None):
         self.workdir: Path = Path(os.getcwd())
         self.protein_pdb: Path = Path(protein_pdb)
-        self.crystal_sdf: Path = Path("Crystal.sdf")
+        if crystal_sdf is None:
+            self.crystal_sdf: Path = Path("Crystal.sdf")
+        else:
+            self.crystal_sdf: Path = Path(crystal_sdf)
         
         self.protein_preared = None
 

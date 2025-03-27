@@ -1,6 +1,15 @@
 # Start with the latest micromamba image
 FROM mambaorg/micromamba:2.0.8
 
+USER root
+RUN apt-get update && apt-get install -y \
+    libgl1-mesa-glx \
+    libglu1-mesa \
+    libxrender1 \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+USER mambauser
+
 # Set environment variables to ensure conda environment activation during build
 ARG MAMBA_DOCKERFILE_ACTIVATE=1
 

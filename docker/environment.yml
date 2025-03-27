@@ -10,6 +10,7 @@ dependencies:
   - numpy
   - openbabel
   - openmm
+  - smina
   - openmmforcefields
   - pymol-open-source
   - rdkit
@@ -20,4 +21,4 @@ dependencies:
   - pip
   - pip:
     - posebusters
-    - cdpl 
+    - cdpkit 
