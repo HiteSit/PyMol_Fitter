@@ -12,8 +12,7 @@ import CDPL.Chem as Chem
 import CDPL.ConfGen as ConfGen
 import datamol as dm
 from openbabel import pybel
-from openmm.app import PDBFile
-from pdbfixer import PDBFixer
+
 from pymol import cmd
 import rdkit.Chem as rdChem
 from rdkit.Chem.EnumerateStereoisomers import (
@@ -22,8 +21,8 @@ from rdkit.Chem.EnumerateStereoisomers import (
 )
 
 # Local imports
-from PymolDocking.Protein_Preparation import ProteinPreparation_Protoss
-from PymolDocking.CDPK_Utils import CDPK_Runner
+from .Protein_Preparation import ProteinPreparation_Protoss
+from .CDPK_Utils import CDPK_Runner
 
 # Set up logging configuration
 logging.basicConfig(
@@ -165,7 +164,3 @@ class Pymol_Docking:
         smina_bustered = self.pose_buster_processer(smina_output, fixed_crystal, protein_PKA)
         
         return smina_bustered
-    
-if __name__ == "__main__":
-    pymol_docking = Pymol_Docking("LAC3.pdb", "Ligand.sdf")
-    pymol_docking.run_smina_docking("Dock", "LAC3_Ligand")
