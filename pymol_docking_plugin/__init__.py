@@ -6,6 +6,12 @@ from pymol.Qt import QtWidgets
 from pymol.Qt.utils import loadUi
 from pymol import cmd
 
+# Import the client for communicating with the Docker server
+from .client import PyMOLDockingClient
+
+# Create the client instance
+docker_client = PyMOLDockingClient("http://localhost:5000")
+
 logger = logging.getLogger(__name__)
 
 def assert_organic(selection):
@@ -36,26 +42,53 @@ def assert_organic(selection):
 
 @cmd.extend
 def off_site_docking(protein_selection, ligand_smiles, outname:str):
-    from .Docking_Engine import Pymol_Docking
-
+    """
+    Perform off-site docking using PyMOL protein selection and a SMILES string for the ligand.
+    
+    This function uses the Docker server to perform the docking.
+    
+    Parameters:
+    - protein_selection (str): The PyMOL selection string for the protein.
+    - ligand_smiles (str): The SMILES string for the ligand.
+    - outname (str): The base name for the output file.
+    """
+    # Check if the Docker server is running
+    if not docker_client.check_health():
+        print("Error: Docker server is not running. Please start the Docker server first.")
+        return
+    
+    # Save the protein to a temporary file
     protein_name = cmd.get_object_list(protein_selection)[0]
     to_save_protein: Path = Path(gettempdir()) / f"{protein_name}.pdb"
-
     cmd.save(to_save_protein.as_posix(), protein_selection)
 
-    pymol_docking = Pymol_Docking(to_save_protein.as_posix(), str(ligand_smiles))
-    docked_sdf: Path = pymol_docking.run_smina_docking("Dock", outname)
+    try:
+        # Run the docking process
+        print(f"Running docking with {protein_name} and SMILES: {ligand_smiles}")
+        results = docker_client.dock(
+            protein_file=to_save_protein,
+            ligand=ligand_smiles,
+            is_smiles=True,
+            dock_mode="Dock",
+            output_name=outname,
+            output_dir=gettempdir()
+        )
+        
+        # Load the results into PyMOL
+        cmd.load(str(results["docked_ligand"]), outname)
+        cmd.load(str(results["prepared_protein"]), f"{outname}_protein")
+        print(f"Docking completed successfully! Results loaded as {outname} and {outname}_protein")
+        
+    except Exception as e:
+        print(f"Error during docking: {e}")
 
-    cmd.load(str(docked_sdf))
-
-# %%
 @cmd.extend
 def on_site_docking(protein_selection, ligand_selection, mode, outname: str, minimization_flag: bool = False):
     """
     Perform on-site docking using PyMOL selections for protein and ligand, and smina for docking or minimization.
 
     This function saves the selected protein and ligand as temporary files, runs the docking or minimization process
-    using smina, and then loads the docked ligand structure back into PyMOL.
+    using the Docker server, and then loads the docked ligand structure back into PyMOL.
 
     Parameters:
     - protein_selection (str): The PyMOL selection string for the protein.
@@ -63,6 +96,7 @@ def on_site_docking(protein_selection, ligand_selection, mode, outname: str, min
     - mode (str): The operation mode, either "Minimize" for energy minimization or "Dock" for docking.
     - outname (str): The base name for the output file. The docked structure will be saved as "{outname}.sdf"
                      and loaded into PyMOL with the same name.
+    - minimization_flag (bool): Whether to perform minimization after docking, default is False.
 
     Raises:
     - AssertionError: If the mode is not one of the expected values ("Minimize" or "Dock").
@@ -70,7 +104,10 @@ def on_site_docking(protein_selection, ligand_selection, mode, outname: str, min
     Returns:
     None. The result of the docking or minimization is loaded into PyMOL.
     """
-    from .Docking_Engine import Pymol_Docking
+    # Check if the Docker server is running
+    if not docker_client.check_health():
+        print("Error: Docker server is not running. Please start the Docker server first.")
+        return
     
     # Assert the mode
     assert mode in ["Minimize", "Dock"]
@@ -85,14 +122,85 @@ def on_site_docking(protein_selection, ligand_selection, mode, outname: str, min
     cmd.save(str(to_save_protein), protein_selection)
     cmd.save(str(to_save_ligand), ligand_selection)
 
-    pymol_docking = Pymol_Docking(str(to_save_protein), str(to_save_ligand))
-    docked_sdf: Path = pymol_docking.run_smina_docking(mode, outname)
+    try:
+        if minimization_flag:
+            # Run docking and minimization
+            print(f"Running docking and minimization with {protein_name} and {ligand_name}")
+            results = docker_client.dock_and_minimize(
+                protein_file=to_save_protein,
+                ligand=to_save_ligand,
+                is_smiles=False,
+                dock_mode=mode,
+                output_name=outname,
+                output_dir=gettempdir()
+            )
+            
+            # Load the results into PyMOL
+            cmd.load(str(results["docked_ligand"]), outname)
+            cmd.load(str(results["prepared_protein"]), f"{outname}_protein")
+            cmd.load(str(results["minimized_complex"]), f"{outname}_complex")
+            print(f"Docking and minimization completed successfully! Results loaded as {outname}, {outname}_protein, and {outname}_complex")
+        else:
+            # Run docking only
+            print(f"Running docking with {protein_name} and {ligand_name}")
+            results = docker_client.dock(
+                protein_file=to_save_protein,
+                ligand=to_save_ligand,
+                is_smiles=False,
+                dock_mode=mode,
+                output_name=outname,
+                output_dir=gettempdir()
+            )
+            
+            # Load the results into PyMOL
+            cmd.load(str(results["docked_ligand"]), outname)
+            cmd.load(str(results["prepared_protein"]), f"{outname}_protein")
+            print(f"Docking completed successfully! Results loaded as {outname} and {outname}_protein")
+            
+    except Exception as e:
+        print(f"Error during docking: {e}")
 
-    cmd.load(str(docked_sdf))
+@cmd.extend
+def docker_minimize_complex(protein_selection, ligand_selection, outname: str):
+    """
+    Perform minimization of a protein-ligand complex using the Docker server.
+    
+    Parameters:
+    - protein_selection (str): The PyMOL selection string for the protein.
+    - ligand_selection (str): The PyMOL selection string for the ligand.
+    - outname (str): The base name for the output file.
+    """
+    # Check if the Docker server is running
+    if not docker_client.check_health():
+        print("Error: Docker server is not running. Please start the Docker server first.")
+        return
+    
+    protein_name = cmd.get_object_list(protein_selection)[0]
+    ligand_name = cmd.get_object_list(ligand_selection)[0]
+    assert_organic(ligand_name)
 
-    if minimization_flag:
-        protein_complex = pymol_docking.run_complex_minimization(to_save_protein, docked_sdf)
-        cmd.load(str(protein_complex))
+    to_save_protein = Path(gettempdir()) / f"{protein_name}.pdb"
+    to_save_ligand = Path(gettempdir()) / f"{ligand_name}.sdf"
+
+    cmd.save(str(to_save_protein), protein_selection)
+    cmd.save(str(to_save_ligand), ligand_selection)
+
+    try:
+        # Run minimization
+        print(f"Running minimization with {protein_name} and {ligand_name}")
+        results = docker_client.minimize_complex(
+            protein_file=to_save_protein,
+            ligand_file=to_save_ligand,
+            output_name=outname,
+            output_dir=gettempdir()
+        )
+        
+        # Load the results into PyMOL
+        cmd.load(str(results["minimized_complex"]), f"{outname}_complex")
+        print(f"Minimization completed successfully! Result loaded as {outname}_complex")
+        
+    except Exception as e:
+        print(f"Error during minimization: {e}")
 
 # Define the dialog class that inherits from QDialog
 class PymolDockingDialog(QtWidgets.QDialog):
@@ -102,6 +210,15 @@ class PymolDockingDialog(QtWidgets.QDialog):
         # Load the UI file directly
         uifile = os.path.join(os.path.dirname(__file__), 'GUI.ui')
         loadUi(uifile, self)
+        
+        # Check if the Docker server is running
+        if not docker_client.check_health():
+            self.setWindowTitle("PyMOL Docking - Docker Server Not Running")
+            # Create a warning message
+            warning_label = QtWidgets.QLabel("Warning: Docker server is not running.\nPlease start the Docker server first.", self)
+            warning_label.setStyleSheet("color: red; font-weight: bold;")
+            # Add the warning to the layout
+            self.layout().addWidget(warning_label)
         
         # Populate the UI with initial data
         self.populate_ligand_select_list()
@@ -159,10 +276,15 @@ class PymolDockingDialog(QtWidgets.QDialog):
 
     def on_dialog_accepted(self):
         """Handle dialog acceptance based on selected modality."""
+        # Check if the Docker server is running
+        if not docker_client.check_health():
+            print("Error: Docker server is not running. Please start the Docker server first.")
+            return
+            
         modality = self.mode_chooser_2.currentText().strip()
         if modality == "In-Site":
             self.in_site_wrapper()
-            logger.info("In-Site docking selected")  # Assuming logger is defined
+            logger.info("In-Site docking selected") 
         elif modality == "Off-Site":
             self.off_site_wrapper()
             logger.info("Off-Site docking selected")

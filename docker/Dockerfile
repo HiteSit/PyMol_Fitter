@@ -12,15 +12,27 @@ COPY --chown=$MAMBA_USER:$MAMBA_USER environment.yml /tmp/environment.yml
 RUN micromamba install -y -n base -f /tmp/environment.yml && \
     micromamba clean --all --yes
     
+# Install Flask and additional requirements
+RUN pip install flask gunicorn requests numpy
+
 # Set working directory for your project
 WORKDIR /app
 
+# Create the source directory
+RUN mkdir -p /app/pymol_docking_src
+
 # Copy your application code (directory)
-COPY --chown=$MAMBA_USER:$MAMBA_USER ../pymol_docking_plugin/CDPK_Utils.py /app/pymol_docking_src/
-COPY --chown=$MAMBA_USER:$MAMBA_USER ../pymol_docking_plugin/Docking_Engine.py /app/pymol_docking_src/
-COPY --chown=$MAMBA_USER:$MAMBA_USER ../pymol_docking_plugin/Protein_Minimization.py /app/pymol_docking_src/
-COPY --chown=$MAMBA_USER:$MAMBA_USER ../pymol_docking_plugin/Protein_Preparation.py /app/pymol_docking_src/
+COPY --chown=$MAMBA_USER:$MAMBA_USER ../pymol_docking_server/pymol_docking_src/CDPK_Utils.py /app/pymol_docking_src/
+COPY --chown=$MAMBA_USER:$MAMBA_USER ../pymol_docking_server/pymol_docking_src/Docking_Engine.py /app/pymol_docking_src/
+COPY --chown=$MAMBA_USER:$MAMBA_USER ../pymol_docking_server/pymol_docking_src/Protein_Minimization.py /app/pymol_docking_src/
+COPY --chown=$MAMBA_USER:$MAMBA_USER ../pymol_docking_server/pymol_docking_src/Protein_Preparation.py /app/pymol_docking_src/
+
+# Copy the Flask application
+COPY --chown=$MAMBA_USER:$MAMBA_USER ../pymol_docking_server/app.py /app/
+
+# Expose port for Flask
+EXPOSE 5000
 
 # The default entrypoint in the micromamba image automatically 
 # activates the base environment
-CMD ["python"]
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "app:app"]
