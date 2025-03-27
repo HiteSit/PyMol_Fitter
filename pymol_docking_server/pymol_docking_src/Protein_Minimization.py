@@ -108,8 +108,12 @@ def minimize_complex(prot_path: Union[str, Path], lig_mol: Chem.rdchem.Mol) -> D
         0.002 * unit.picoseconds,
     )
     
-    platform: Platform = Platform.getPlatformByName('CUDA')
-    proprieties: Dict[str, str] = {'Precision': 'mixed', 'CudaDeviceIndex': "0"}
+    try:
+        platform: Platform = Platform.getPlatformByName('CUDA')
+        proprieties: Dict[str, str] = {'Precision': 'mixed', 'CudaDeviceIndex': "0"}
+    except Exception as e:
+        platform: Platform = Platform.getPlatformByName('CPU')
+        proprieties: Dict[str, str] = {}
 
     simulation: Simulation = Simulation(
         modeller.topology, 
