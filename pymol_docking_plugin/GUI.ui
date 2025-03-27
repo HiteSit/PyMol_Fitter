@@ -95,6 +95,19 @@
     </rect>
    </property>
   </widget>
+  <widget class="QCheckBox" name="minimizer">
+   <property name="geometry">
+    <rect>
+     <x>40</x>
+     <y>170</y>
+     <width>81</width>
+     <height>31</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Minimize?</string>
+   </property>
+  </widget>
  </widget>
  <resources/>
  <connections/>

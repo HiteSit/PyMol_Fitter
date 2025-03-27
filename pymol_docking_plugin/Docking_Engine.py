@@ -3,7 +3,7 @@ import logging
 import os
 import subprocess
 from pathlib import Path
-from tempfile import gettempdir
+from tempfile import gettempdir, NamedTemporaryFile
 
 # Third party imports
 from Bio.PDB import PDBParser
@@ -12,6 +12,10 @@ import CDPL.Chem as Chem
 import CDPL.ConfGen as ConfGen
 import datamol as dm
 from openbabel import pybel
+import numpy as np
+
+import biotite.structure as struc
+from biotite.structure.io import pdb
 
 from pymol import cmd
 import rdkit.Chem as rdChem
@@ -22,6 +26,7 @@ from rdkit.Chem.EnumerateStereoisomers import (
 
 # Local imports
 from .Protein_Preparation import ProteinPreparation_Protoss
+from .Protein_Minimization import minimize_complex
 from .CDPK_Utils import CDPK_Runner
 
 # Set up logging configuration
@@ -47,13 +52,27 @@ class Pymol_Docking:
         else:
             self.ligands_smiles: str = input_ligands
             self.input_mode = "SMILES"
-
+    
+    @staticmethod
+    def filter_protein(protein_pdb: Path) -> Path:
+        struct_array = pdb.PDBFile.read(protein_pdb).get_structure(model=1)
+        struct_array_filter = struct_array[struc.filter_amino_acids(struct_array)]
+        
+        struct_out = pdb.PDBFile()
+        struct_out.set_structure(struct_array_filter)
+        
+        with NamedTemporaryFile(suffix=".pdb", delete=False) as tmp_file:
+            struct_out.write(tmp_file.name)
+            return Path(tmp_file.name)
+        
     def prepare_protein(self) -> Path:
         protein_basename: str = self.protein_pdb.stem
+        
+        protein_FILT = self.filter_protein(self.protein_pdb)
         protein_PREP: Path = self.workdir / f"{protein_basename}_PREP.pdb"
         
         pp = ProteinPreparation_Protoss()
-        prepared_protein = pp(self.protein_pdb, protein_PREP)
+        prepared_protein = pp(protein_FILT, protein_PREP)
         
         self.protein_preared = prepared_protein
         return prepared_protein
@@ -95,30 +114,35 @@ class Pymol_Docking:
         
     @staticmethod
     def pose_buster_processer(mol_pred: Path, mol_crystal: Path, mol_prot: Path):
-        from posebusters import PoseBusters
-        buster = PoseBusters()
-        df = buster.bust(mol_pred, mol_crystal, mol_prot)
-        df.reset_index(drop=False, inplace=True)
-        bool_columns = df.select_dtypes(include=[bool]).columns
-        success_rate_series = df[bool_columns].mean(axis=1) * 100
-        success_rate_list = success_rate_series.tolist()
-        
-        # Read all molecules first
-        mol_list = list(rdChem.SDMolSupplier(mol_pred.as_posix()))
-        
-        # Create a temporary file path
-        temp_path = mol_pred.parent / f"temp_{mol_pred.name}"
-        
-        # Write to temporary file
-        with rdChem.SDWriter(temp_path.as_posix()) as writer:
-            for pose, success_rate in zip(mol_list, success_rate_list):
-                pose.SetProp("Compliance", str(success_rate))  # Convert to string
-                writer.write(pose)
-        
-        # Replace original file with temporary file
-        temp_path.replace(mol_pred)
-        
-        return mol_pred
+        try:
+            from posebusters import PoseBusters
+            buster = PoseBusters()
+            df = buster.bust(mol_pred, mol_crystal, mol_prot)
+            df.reset_index(drop=False, inplace=True)
+            bool_columns = df.select_dtypes(include=[bool]).columns
+            success_rate_series = df[bool_columns].mean(axis=1) * 100
+            success_rate_list = success_rate_series.tolist()
+            success_rate_mean = np.mean(success_rate_series)
+            
+            # Read all molecules first
+            mol_list = list(rdChem.SDMolSupplier(mol_pred.as_posix()))
+            
+            # Create a temporary file path
+            temp_path = mol_pred.parent / f"temp_{mol_pred.name}"
+            
+            # Write to temporary file
+            with rdChem.SDWriter(temp_path.as_posix()) as writer:
+                for pose, success_rate in zip(mol_list, success_rate_list):
+                    pose.SetProp("Compliance", str(success_rate))  # Convert to string
+                    writer.write(pose)
+            
+            # Replace original file with temporary file
+            temp_path.replace(mol_pred)
+            
+            return mol_pred, success_rate_mean
+        except Exception as e:
+            logger.error(f"Error in pose buster processer: {e}")
+            return mol_pred, 0
             
     def run_smina_docking(self, mode: str, docking_basename: str) -> Path:
         # Fix the protein
@@ -161,6 +185,7 @@ class Pymol_Docking:
                 subprocess.run(smina_lst, check=True, stdout=log_file, stderr=log_file)
         
         logger.info("Running pose buster")
-        smina_bustered = self.pose_buster_processer(smina_output, fixed_crystal, protein_PKA)
+        smina_bustered, compliance_rate = self.pose_buster_processer(smina_output, fixed_crystal, protein_PKA)
+        print(f"\n\nCompliance rate: {round(compliance_rate, 2)}\n\n")
         
         return smina_bustered
