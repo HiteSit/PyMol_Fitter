@@ -1,0 +1,20 @@
+name: pymol-docking
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - biopython
+  - biotite
+  - datamol
+  - numpy
+  - openbabel
+  - openmm
+  - openmmforcefields
+  - pymol-open-source
+  - rdkit
+  - requests
+  - pdbfixer
+  - pip
+  - pip:
+    - posebusters

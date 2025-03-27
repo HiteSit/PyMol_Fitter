@@ -4,10 +4,13 @@ import os
 import subprocess
 from pathlib import Path
 from tempfile import gettempdir, NamedTemporaryFile
+from typing import Literal, Union, Optional, Dict, Any, Tuple
 
 # Third party imports
 from Bio.PDB import PDBParser
 from Bio.PDB.PDBIO import PDBIO
+import biotite.structure as struc
+from biotite.structure.io import pdb
 import CDPL.Chem as Chem
 import CDPL.ConfGen as ConfGen
 import datamol as dm
@@ -69,7 +72,7 @@ class Pymol_Docking:
         protein_basename: str = self.protein_pdb.stem
         
         protein_FILT = self.filter_protein(self.protein_pdb)
-        protein_PREP: Path = self.workdir / f"{protein_basename}_PREP.pdb"
+        protein_PREP: Path = self.workdir / f"{protein_basename}_Prep.pdb"
         
         pp = ProteinPreparation_Protoss()
         prepared_protein = pp(protein_FILT, protein_PREP)
@@ -144,7 +147,7 @@ class Pymol_Docking:
             logger.error(f"Error in pose buster processer: {e}")
             return mol_pred, 0
             
-    def run_smina_docking(self, mode: str, docking_basename: str) -> Path:
+    def run_smina_docking(self, mode: Literal["Dock", "Minimize"], docking_basename: str) -> Tuple[Path, Path]:
         # Fix the protein
         print("Running protein preparation")
         protein_PKA: Path = self.prepare_protein()
@@ -188,4 +191,38 @@ class Pymol_Docking:
         smina_bustered, compliance_rate = self.pose_buster_processer(smina_output, fixed_crystal, protein_PKA)
         print(f"\n\nCompliance rate: {round(compliance_rate, 2)}\n\n")
         
-        return smina_bustered
+        return smina_bustered, protein_PKA
+
+    def run_complex_minimization(self, protein_prep: Path, docked_ligand: Path):
+        # Get the mol object
+        mol = dm.read_sdf(docked_ligand)[0]
+        
+        minimizer = minimize_complex(protein_prep, mol)
+        
+        pdb_string_before: str | float = minimizer["PDB_BEFORE"]
+        pdb_string_after: str | float = minimizer["PDB_AFTER"]
+        
+        def write_temp_pdb(content: str) -> str:
+            """Write PDB content to a temporary file and return the file path."""
+
+            tmp_file = NamedTemporaryFile(delete=False, suffix=".pdb")
+            with open(tmp_file.name, "w") as f:
+                f.write(content)
+            
+            return tmp_file.name
+
+        temp_pdb_path_before = write_temp_pdb(pdb_string_before)
+        temp_pdb_path_after = write_temp_pdb(pdb_string_after)
+
+        struct_1 = pdb.PDBFile.read(temp_pdb_path_before).get_structure(model=1)
+        struct_2 = pdb.PDBFile.read(temp_pdb_path_after).get_structure(model=1)
+        
+        multistate = struc.stack([struct_1, struct_2])
+        pdb_multistate = pdb.PDBFile()
+        pdb_multistate.set_structure(multistate)
+        
+        protein_basename: str = self.protein_pdb.stem
+        protein_complex = self.workdir / f"{protein_basename}_Complex.pdb"
+        pdb_multistate.write(protein_complex)
+        
+        return protein_complex
