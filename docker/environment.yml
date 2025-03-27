@@ -3,7 +3,7 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  - python=3.11
+  - python=3.9
   - biopython
   - biotite
   - datamol
@@ -15,6 +15,9 @@ dependencies:
   - rdkit
   - requests
   - pdbfixer
+  - flask
+  - gunicorn
   - pip
   - pip:
     - posebusters
+    - cdpl 

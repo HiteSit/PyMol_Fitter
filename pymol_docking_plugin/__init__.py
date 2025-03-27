@@ -320,4 +320,4 @@ def __init_plugin__(app=None):
 def run_plugin_gui():
     """Create and show the dialog when the menu item is clicked."""
     dialog = PymolDockingDialog()
-    dialog.exec_()  # Show the dialog modally
+    dialog.exec_()  # Show the dialog modally 
