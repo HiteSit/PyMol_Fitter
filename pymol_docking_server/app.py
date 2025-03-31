@@ -74,7 +74,7 @@ def dock_minimize():
                 f.write(base64.b64decode(crystal_data))
                 
             # Initialize Pymol_Docking
-            docking_class = Pymol_Docking(str(protein_path), ligand_input, str(crystal_sdf_path))
+            docking_class = Pymol_Docking(str(protein_path), ligand_input, str(crystal_sdf_path), is_smiles)
             docked_path, protein_prep_path = docking_class.run_smina_docking(dock_mode, output_name)
             
             # Encode results

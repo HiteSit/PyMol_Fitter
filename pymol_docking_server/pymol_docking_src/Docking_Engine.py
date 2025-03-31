@@ -42,7 +42,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 class Pymol_Docking:
-    def __init__(self, protein_pdb: str, input_ligands: str, crystal_sdf: Optional[str] = None):
+    def __init__(self, protein_pdb: str, input_ligands: str, crystal_sdf: Optional[str] = None, is_smiles: bool = False):
         self.workdir: Path = Path(os.getcwd())
         self.protein_pdb: Path = Path(protein_pdb)
         if crystal_sdf is None:
@@ -51,13 +51,20 @@ class Pymol_Docking:
             self.crystal_sdf: Path = Path(crystal_sdf)
         
         self.protein_preared = None
-
-        if os.path.exists(input_ligands):
-            self.ligands_sdf: Path = Path(input_ligands)
-            self.input_mode = "SDF"
-        else:
+        
+        if is_smiles:
             self.ligands_smiles: str = input_ligands
             self.input_mode = "SMILES"
+        else:
+            self.ligands_sdf: Path = Path(input_ligands)
+            self.input_mode = "SDF"
+
+        # if os.path.exists(input_ligands):
+        #     self.ligands_sdf: Path = Path(input_ligands)
+        #     self.input_mode = "SDF"
+        # else:
+        #     self.ligands_smiles: str = input_ligands
+        #     self.input_mode = "SMILES"
     
     @staticmethod
     def filter_protein(protein_pdb: Path) -> Path:
