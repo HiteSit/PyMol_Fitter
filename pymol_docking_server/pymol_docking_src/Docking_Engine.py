@@ -3,7 +3,7 @@ import logging
 import os
 import subprocess
 from pathlib import Path
-from tempfile import gettempdir, NamedTemporaryFile
+from tempfile import _TemporaryFileWrapper, gettempdir, NamedTemporaryFile
 from typing import Literal, Union, Optional, Dict, Any, Tuple
 
 # Third party imports
@@ -91,7 +91,7 @@ class Pymol_Docking:
         return prepared_protein
 
     @staticmethod
-    def cdpk_fixer(input_sdf: Path, TMP_basename: str) -> None:
+    def cdpk_fixer(input_sdf: Path, TMP_basename: str, mode: Literal["Dock", "Minimize"]) -> None:
         TMP_fixed_sdf = Path(gettempdir()) / "TMP_fixed.sdf"
         
         supplier = rdChem.SDMolSupplier(input_sdf.as_posix())
@@ -101,29 +101,54 @@ class Pymol_Docking:
             writer.write(mol)
         writer.close()
         
-        cdpk_runner = CDPK_Runner(standardize=True, protonate=True, gen3d=True)
-        cdpk_runner.prepare_ligands(TMP_fixed_sdf, TMP_fixed_sdf)
-        
-        return TMP_fixed_sdf.resolve()
+        if mode == "Dock":
+            cdpk_runner = CDPK_Runner(standardize=True, protonate=True, gen3d=True)
+            cdpk_runner.prepare_ligands(TMP_fixed_sdf, TMP_fixed_sdf)
+            
+            return TMP_fixed_sdf.resolve()
+        elif mode == "Minimize":
+            cdpk_runner = CDPK_Runner(standardize=True, protonate=True, gen3d=False)
+            cdpk_runner.prepare_ligands(TMP_fixed_sdf, TMP_fixed_sdf)
+            
+            return TMP_fixed_sdf.resolve()
     
-    def prepare_ligands(self):
-        if self.input_mode == "SDF":
+    def prepare_ligands(self, mode: Literal["Dock", "Minimize"]):
+        
+        def _rdkit_addhs(mol_path: Path):
+            another_tmp = NamedTemporaryFile(suffix=".sdf", delete=False)
+            mols = dm.read_sdf(mol_path)
+            mols_H = []
+            for mol in mols:
+                mol_H = dm.add_hs(mol, add_coords=True)
+                mols_H.append(mol_H)
+            
+            dm.to_sdf(mols_H, another_tmp.name)
+            
+            return Path(another_tmp.name)
+        
+        if mode == "Dock":
+            if self.input_mode == "SDF":
+                logger.info("Preparing ligands from SDF")
+                fixed_crystal = self.crystal_sdf.resolve()
+                fixed_ligands = self.cdpk_fixer(self.ligands_sdf, "ligand", mode)
+            
+            elif self.input_mode == "SMILES":
+                TMP_SMILES_SDF = Path(gettempdir()) / "TMP_SMILES.sdf"
+                mol = dm.to_mol(self.ligands_smiles, sanitize=True, kekulize=True)
+                mol.SetProp("_Name", "ligand")
+                dm.to_sdf(mol, TMP_SMILES_SDF)
+                
+                fixed_crystal = self.crystal_sdf.resolve()
+                fixed_ligands = self.cdpk_fixer(TMP_SMILES_SDF, "ligand", mode)
+                
+            return _rdkit_addhs(fixed_ligands), fixed_crystal
+            
+        elif mode == "Minimize":
             logger.info("Preparing ligands from SDF")
             fixed_crystal = self.crystal_sdf.resolve()
-            fixed_ligands = self.cdpk_fixer(self.ligands_sdf, "ligand")
-
-            return fixed_ligands.resolve(), fixed_crystal.resolve()
-        
-        elif self.input_mode == "SMILES":
-            TMP_SMILES_SDF = Path(gettempdir()) / "TMP_SMILES.sdf"
-            mol = dm.to_mol(self.ligands_smiles, sanitize=True, kekulize=True)
-            mol.SetProp("_Name", "ligand")
-            dm.to_sdf(mol, TMP_SMILES_SDF)
+            fixed_ligands = self.cdpk_fixer(self.ligands_sdf, "ligand", mode)
             
-            fixed_crystal = self.crystal_sdf.resolve()
-            fixed_ligands = self.cdpk_fixer(TMP_SMILES_SDF, "ligand")
-            
-            return fixed_ligands.resolve(), fixed_crystal.resolve()
+            return _rdkit_addhs(fixed_ligands), fixed_crystal
         
     @staticmethod
     def pose_buster_processer(mol_pred: Path, mol_crystal: Path, mol_prot: Path):
@@ -135,22 +160,22 @@ class Pymol_Docking:
             bool_columns = df.select_dtypes(include=[bool]).columns
             success_rate_series = df[bool_columns].mean(axis=1) * 100
             success_rate_list = success_rate_series.tolist()
-            success_rate_mean = np.mean(success_rate_series)
+            success_rate_mean = round(np.mean(success_rate_series), 2)
             
-            # Read all molecules first
-            mol_list = list(rdChem.SDMolSupplier(mol_pred.as_posix()))
+            # # Read all molecules first
+            # mol_list = list(rdChem.SDMolSupplier(mol_pred.as_posix()))
             
-            # Create a temporary file path
-            temp_path = mol_pred.parent / f"temp_{mol_pred.name}"
+            # # Create a temporary file path
+            # temp_path = mol_pred.parent / f"temp_{mol_pred.name}"
             
-            # Write to temporary file
-            with rdChem.SDWriter(temp_path.as_posix()) as writer:
-                for pose, success_rate in zip(mol_list, success_rate_list):
-                    pose.SetProp("Compliance", str(success_rate))  # Convert to string
-                    writer.write(pose)
+            # # Write to temporary file
+            # with rdChem.SDWriter(temp_path.as_posix()) as writer:
+            #     for pose, success_rate in zip(mol_list, success_rate_list):
+            #         pose.SetProp("Compliance", str(success_rate))  # Convert to string
+            #         writer.write(pose)
             
-            # Replace original file with temporary file
-            temp_path.replace(mol_pred)
+            # # Replace original file with temporary file
+            # temp_path.replace(mol_pred)
             
             return mol_pred, success_rate_mean
         except Exception as e:
@@ -163,7 +188,7 @@ class Pymol_Docking:
         protein_PKA: Path = self.prepare_protein()
 
         # Fix the ligands
-        fixed_ligands, fixed_crystal = self.prepare_ligands()
+        fixed_ligands, fixed_crystal = self.prepare_ligands(mode)
 
         # Define the output
         smina_output: Path = self.workdir / f"{docking_basename}.sdf"
@@ -190,8 +215,8 @@ class Pymol_Docking:
                 "-r", protein_PKA.as_posix(),
                 "-l", fixed_ligands.as_posix(),
                 "--autobox_ligand", fixed_crystal.as_posix(),
+                "--minimize",
                 "-o", smina_output,
-                "--minimize", "--minimize_iters", "10"
             ]
             print("Running docking")
             with open(smina_log, "w") as log_file:

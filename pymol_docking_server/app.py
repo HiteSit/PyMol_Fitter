@@ -114,6 +114,14 @@ def dock_minimize():
         logger.error(f"Error during docking: {e}", exc_info=True)
         return jsonify({"success": False, "message": f"Error: {str(e)}"}), 500
 
+@app.route('/minimize', methods=['POST'])
+def minimize():
+    try:
+        pass
+    except Exception as e:
+        logger.error(f"Error during minimization: {e}", exc_info=True)
+        return jsonify({"success": False, "message": f"Error: {str(e)}"}), 500
+
 # @app.route('/dock', methods=['POST'])
 # def dock():
 #     """
