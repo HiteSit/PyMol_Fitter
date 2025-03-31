@@ -201,7 +201,7 @@ class Pymol_Docking:
         smina_bustered, compliance_rate = self.pose_buster_processer(smina_output, fixed_crystal, protein_PKA)
         print(f"\n\nCompliance rate: {round(compliance_rate, 2)}\n\n")
         
-        return smina_bustered, protein_PKA
+        return smina_bustered, protein_PKA, smina_log
 
     def run_complex_minimization(self, protein_prep: Path, docked_ligand: Path):
         # Get the mol object

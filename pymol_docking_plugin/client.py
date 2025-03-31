@@ -154,6 +154,12 @@ class PyMOLDockingClient:
         
         result = {}
         
+        # Save the log
+        result["log"] = self._decode_and_save(
+            response_data["log"],
+            output_dir / f"{output_name}.log"
+        )
+        
         # Save docked ligand
         result["docked_ligand"] = self._decode_and_save(
             response_data["docked_ligand"],

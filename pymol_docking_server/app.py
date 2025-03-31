@@ -75,7 +75,7 @@ def dock_minimize():
                 
             # Initialize Pymol_Docking
             docking_class = Pymol_Docking(str(protein_path), ligand_input, str(crystal_sdf_path), is_smiles)
-            docked_path, protein_prep_path = docking_class.run_smina_docking(dock_mode, output_name)
+            docked_path, protein_prep_path , docked_log = docking_class.run_smina_docking(dock_mode, output_name)
             
             # Encode results
             with open(docked_path, "rb") as f:
@@ -83,6 +83,9 @@ def dock_minimize():
             
             with open(protein_prep_path, "rb") as f:
                 prepared_protein_data = base64.b64encode(f.read()).decode("utf-8")
+            
+            with open(docked_log, "rb") as f:
+                docked_log_content = base64.b64encode(f.read()).decode("utf-8")
             
             if minimization_bool:
                 protein_complex = docking_class.run_complex_minimization(protein_path, docked_path)
@@ -92,6 +95,7 @@ def dock_minimize():
                 return jsonify({
                     "success": True,
                     "message": f"Docking completed successfully with mode: {dock_mode}",
+                    "log": docked_log_content,
                     "docked_ligand": docked_ligand_data,
                     "prepared_protein": prepared_protein_data,
                     "minimized_complex": protein_complex_data
@@ -101,6 +105,7 @@ def dock_minimize():
                 return jsonify({
                     "success": True,
                     "message": f"Docking completed successfully with mode: {dock_mode}",
+                    "log": docked_log_content,
                     "docked_ligand": docked_ligand_data,
                     "prepared_protein": prepared_protein_data,
                 })
