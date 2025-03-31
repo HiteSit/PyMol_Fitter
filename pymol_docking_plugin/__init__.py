@@ -62,16 +62,21 @@ def off_site_docking(protein_selection, ligand_smiles, outname:str):
     to_save_protein: Path = Path(gettempdir()) / f"{protein_name}.pdb"
     cmd.save(to_save_protein.as_posix(), protein_selection)
 
+    # Define crystal file path (using "./Crystal.sdf" as specified)
+    crystal_file = Path("./Crystal.sdf")
+
     try:
-        # Run the docking process
+        # Run the docking process using the consolidated dock_minimize function
         print(f"Running docking with {protein_name} and SMILES: {ligand_smiles}")
-        results = docker_client.dock(
+        results = docker_client.dock_minimize(
             protein_file=to_save_protein,
             ligand=ligand_smiles,
+            crystal_file=crystal_file,
             is_smiles=True,
+            minimize=False,
             dock_mode="Dock",
             output_name=outname,
-            output_dir=gettempdir()
+            output_dir="."
         )
         
         # Load the results into PyMOL
@@ -93,7 +98,7 @@ def on_site_docking(protein_selection, ligand_selection, mode, outname: str, min
     Parameters:
     - protein_selection (str): The PyMOL selection string for the protein.
     - ligand_selection (str): The PyMOL selection string for the ligand.
-    - mode (str): The operation mode, either "Minimize" for energy minimization or "Dock" for docking.
+    - mode (str): The operation mode, either "Minimize" or "Dock".
     - outname (str): The base name for the output file. The docked structure will be saved as "{outname}.sdf"
                      and loaded into PyMOL with the same name.
     - minimization_flag (bool): Whether to perform minimization after docking, default is False.
@@ -122,85 +127,36 @@ def on_site_docking(protein_selection, ligand_selection, mode, outname: str, min
     cmd.save(str(to_save_protein), protein_selection)
     cmd.save(str(to_save_ligand), ligand_selection)
 
+    # Define crystal file path (using "./Crystal.sdf" as specified)
+    crystal_file = Path("./Crystal.sdf")
+
     try:
-        if minimization_flag:
-            # Run docking and minimization
-            print(f"Running docking and minimization with {protein_name} and {ligand_name}")
-            results = docker_client.dock_and_minimize(
-                protein_file=to_save_protein,
-                ligand=to_save_ligand,
-                is_smiles=False,
-                dock_mode=mode,
-                output_name=outname,
-                output_dir=gettempdir()
-            )
-            
-            # Load the results into PyMOL
-            cmd.load(str(results["docked_ligand"]), outname)
-            cmd.load(str(results["prepared_protein"]), f"{outname}_protein")
+        # Run docking using the consolidated dock_minimize function
+        print(f"Running {'docking with minimization' if minimization_flag else 'docking'} with {protein_name} and {ligand_name}")
+        results = docker_client.dock_minimize(
+            protein_file=to_save_protein,
+            ligand=to_save_ligand,
+            crystal_file=crystal_file,
+            is_smiles=False,
+            minimize=minimization_flag,
+            dock_mode=mode,
+            output_name=outname,
+            output_dir="."
+        )
+        
+        # Load the results into PyMOL
+        cmd.load(str(results["docked_ligand"]), outname)
+        cmd.load(str(results["prepared_protein"]), f"{outname}_protein")
+        
+        # If minimization was performed, load the minimized complex
+        if minimization_flag and "minimized_complex" in results:
             cmd.load(str(results["minimized_complex"]), f"{outname}_complex")
             print(f"Docking and minimization completed successfully! Results loaded as {outname}, {outname}_protein, and {outname}_complex")
         else:
-            # Run docking only
-            print(f"Running docking with {protein_name} and {ligand_name}")
-            results = docker_client.dock(
-                protein_file=to_save_protein,
-                ligand=to_save_ligand,
-                is_smiles=False,
-                dock_mode=mode,
-                output_name=outname,
-                output_dir=gettempdir()
-            )
-            
-            # Load the results into PyMOL
-            cmd.load(str(results["docked_ligand"]), outname)
-            cmd.load(str(results["prepared_protein"]), f"{outname}_protein")
             print(f"Docking completed successfully! Results loaded as {outname} and {outname}_protein")
             
     except Exception as e:
         print(f"Error during docking: {e}")
-
-@cmd.extend
-def docker_minimize_complex(protein_selection, ligand_selection, outname: str):
-    """
-    Perform minimization of a protein-ligand complex using the Docker server.
-    
-    Parameters:
-    - protein_selection (str): The PyMOL selection string for the protein.
-    - ligand_selection (str): The PyMOL selection string for the ligand.
-    - outname (str): The base name for the output file.
-    """
-    # Check if the Docker server is running
-    if not docker_client.check_health():
-        print("Error: Docker server is not running. Please start the Docker server first.")
-        return
-    
-    protein_name = cmd.get_object_list(protein_selection)[0]
-    ligand_name = cmd.get_object_list(ligand_selection)[0]
-    assert_organic(ligand_name)
-
-    to_save_protein = Path(gettempdir()) / f"{protein_name}.pdb"
-    to_save_ligand = Path(gettempdir()) / f"{ligand_name}.sdf"
-
-    cmd.save(str(to_save_protein), protein_selection)
-    cmd.save(str(to_save_ligand), ligand_selection)
-
-    try:
-        # Run minimization
-        print(f"Running minimization with {protein_name} and {ligand_name}")
-        results = docker_client.minimize_complex(
-            protein_file=to_save_protein,
-            ligand_file=to_save_ligand,
-            output_name=outname,
-            output_dir=gettempdir()
-        )
-        
-        # Load the results into PyMOL
-        cmd.load(str(results["minimized_complex"]), f"{outname}_complex")
-        print(f"Minimization completed successfully! Result loaded as {outname}_complex")
-        
-    except Exception as e:
-        print(f"Error during minimization: {e}")
 
 # Define the dialog class that inherits from QDialog
 class PymolDockingDialog(QtWidgets.QDialog):
