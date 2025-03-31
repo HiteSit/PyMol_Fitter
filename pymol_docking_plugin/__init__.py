@@ -173,8 +173,13 @@ class PymolDockingDialog(QtWidgets.QDialog):
             # Create a warning message
             warning_label = QtWidgets.QLabel("Warning: Docker server is not running.\nPlease start the Docker server first.", self)
             warning_label.setStyleSheet("color: red; font-weight: bold;")
-            # Add the warning to the layout
-            self.layout().addWidget(warning_label)
+            # Add the warning to the tab's layout
+            if self.tab.layout() is None:
+                # If tab has no layout, create one
+                layout = QtWidgets.QVBoxLayout(self.tab)
+                layout.addWidget(warning_label)
+            else:
+                self.tab.layout().addWidget(warning_label)
         
         # Populate the UI with initial data
         self.populate_ligand_select_list()
@@ -183,8 +188,14 @@ class PymolDockingDialog(QtWidgets.QDialog):
         
         # Connect signals to slots
         self.mode_chooser_2.currentIndexChanged.connect(self.clear_and_repopulate_selectors)
+        self.mode_chooser.currentIndexChanged.connect(self.on_mode_changed)
         self.buttonBox.accepted.connect(self.on_dialog_accepted)
+        # Connect tab widget change signal
+        self.tabWidget.currentChanged.connect(self.on_tab_changed)
         # Note: buttonBox is assumed to be in GUI.ui and connected to accept/reject in the UI file
+        
+        # Initially set minimizer visibility based on the default mode selection
+        self.on_mode_changed(self.mode_chooser.currentIndex())
     
     @staticmethod
     def _get_select_list():
@@ -215,21 +226,67 @@ class PymolDockingDialog(QtWidgets.QDialog):
         """Populate the docking mode chooser."""
         possible_choices = ["Minimize", "Dock"]
         self.mode_chooser.addItems(possible_choices)
-
+        
     def choose_setting(self):
-        """Populate the modality chooser."""
+        """Populate the modality chooser and set initial visibility."""
         possible_choices = ["In-Site", "Off-Site"]
         self.mode_chooser_2.addItems(possible_choices)
+        
+        # Set initial visibility based on default selection
+        modality = self.mode_chooser_2.currentText().strip()
+        
+        # Default visibility setup for In-Site mode
+        in_site_visible = (modality == "In-Site")
+        # These are the widgets for In-Site docking
+        self.protein_chooser_1.setVisible(in_site_visible)
+        self.ligand_chooser_1.setVisible(in_site_visible) 
+        self.mode_chooser.setVisible(in_site_visible)
+        self.output_chooser.setVisible(in_site_visible)
+        # Don't set minimizer visibility here - it's controlled by mode_chooser
+        
+        # Default visibility setup for Off-Site mode
+        off_site_visible = (modality == "Off-Site")
+        # These are the widgets for Off-Site docking
+        self.protein_chooser_2.setVisible(off_site_visible)
+        self.smile_chooser_2.setVisible(off_site_visible)
+        self.output_chooser_2.setVisible(off_site_visible)
+        
+        # You may also want to set visibility for the layout containers
+        self.verticalLayoutWidget.setVisible(in_site_visible)
+        self.verticalLayoutWidget_2.setVisible(off_site_visible)
 
     def clear_and_repopulate_selectors(self):
-        """Clear and repopulate the selectors when modality changes."""
+        """Clear and repopulate the selectors when modality changes, and toggle visibility."""
+        # Clear and repopulate as before
         self.protein_chooser_1.clear()
         self.protein_chooser_2.clear()
         self.ligand_chooser_1.clear()
         self.mode_chooser.clear()
         self.populate_ligand_select_list()
         self.choose_docking_modes()
-
+        
+        # Toggle visibility based on modality
+        modality = self.mode_chooser_2.currentText().strip()
+        
+        # For In-Site mode
+        in_site_visible = (modality == "In-Site")
+        self.protein_chooser_1.setVisible(in_site_visible)
+        self.ligand_chooser_1.setVisible(in_site_visible)
+        self.mode_chooser.setVisible(in_site_visible)
+        self.output_chooser.setVisible(in_site_visible)
+        # Don't set minimizer visibility here - it's controlled by mode_chooser
+        self.verticalLayoutWidget.setVisible(in_site_visible)
+        
+        # Update the minimizer visibility based on both the modality and the selected mode
+        self.on_mode_changed(self.mode_chooser.currentIndex())
+        
+        # For Off-Site mode
+        off_site_visible = (modality == "Off-Site")
+        self.protein_chooser_2.setVisible(off_site_visible)
+        self.smile_chooser_2.setVisible(off_site_visible)
+        self.output_chooser_2.setVisible(off_site_visible)
+        self.verticalLayoutWidget_2.setVisible(off_site_visible)
+        
     def on_dialog_accepted(self):
         """Handle dialog acceptance based on selected modality."""
         # Check if the Docker server is running
@@ -266,6 +323,28 @@ class PymolDockingDialog(QtWidgets.QDialog):
         outname = self.output_chooser_2.toPlainText()
         logger.info("Running off-site docking...")
         off_site_docking(s1, str(s2), outname)
+        
+    def on_tab_changed(self, index):
+        """Handle tab change events."""
+        if index == 0:
+            # First tab (original docking interface)
+            logger.info("Switched to docking tab")
+            # You could refresh the UI here if needed
+            self.populate_ligand_select_list()
+        elif index == 1:
+            # Second tab (new functionality)
+            logger.info("Switched to second tab")
+            # Initialize any second tab functionality here
+            
+    def on_mode_changed(self, index):
+        """Toggle minimizer visibility based on the selected docking mode."""
+        mode = self.mode_chooser.currentText()
+        modality = self.mode_chooser_2.currentText().strip()
+        
+        # Only show minimizer checkbox when in "In-Site" modality AND "Minimize" mode
+        minimizer_visible = (modality == "In-Site" and mode == "Minimize")
+        self.minimizer.setVisible(minimizer_visible)
+        logger.info(f"Mode changed to {mode}, minimizer visibility set to {minimizer_visible}")
 
 # Plugin initialization for PyMOL
 def __init_plugin__(app=None):
