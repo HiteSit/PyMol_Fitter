@@ -3,6 +3,8 @@
 .github
 .gitignore
 .gitattributes
+.git/
+**/.git/
 
 # Python
 __pycache__/
@@ -45,4 +47,21 @@ ENV/
 .vscode/
 .idea/
 *.swp
-*.swo 
+*.swo
+
+# Documentation
+*.md
+README*
+CONTRIBUTING*
+GETTING_STARTED*
+
+# Docker
+**/docker-compose*.yml
+
+# Examples folder (unless specifically needed)
+examples/
+
+# Cache and temp files
+**/*.pickle
+**/.DS_Store
+**/Thumbs.db

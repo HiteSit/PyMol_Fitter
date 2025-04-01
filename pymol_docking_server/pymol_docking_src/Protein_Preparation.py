@@ -157,3 +157,29 @@ class ProteinPreparation_Protoss:
             Path: Path to the prepared protein file in PDB format.
         """
         return self.prepare_protein_protoss(input_pdb, output_pdb)
+    
+    
+class ProteinPreparation_PDBFixer:
+    """
+    A class for preparing protein structures using PDBFixer.
+    """
+    
+    def __call__(self, input_pdb: Path, output_pdb: Path) -> Path:
+        """
+        Call method that wraps prepare_protein_pdb_fixer for easier usage.
+        """
+        
+        from pdbfixer import PDBFixer
+        from openmm.app import PDBFile
+
+        fixer = PDBFixer(filename=str(input_pdb))
+        fixer.removeHeterogens(True)
+
+        fixer.findMissingResidues()
+        fixer.findMissingAtoms()
+        fixer.findNonstandardResidues()
+
+        fixer.addMissingHydrogens(7.0)
+
+        PDBFile.writeFile(fixer.topology, fixer.positions, open(str(output_pdb), 'w'), keepIds=True)
+        return output_pdb

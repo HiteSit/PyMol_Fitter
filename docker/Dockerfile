@@ -20,6 +20,33 @@ COPY --chown=mambauser:mambauser docker/environment.yml /tmp/environment.yml
 RUN micromamba install -y -n base -f /tmp/environment.yml && \
     micromamba clean --all --yes
 
+# RUN micromamba remove -y -n base --force cudatoolkit && \
+#     micromamba clean --all --yes
+
+# Cleanup
+RUN micromamba clean --all --yes && \
+    # Remove package cache
+    rm -rf /opt/conda/pkgs/* && \
+    # Remove documentation
+    rm -rf /opt/conda/share/doc/* && \
+    rm -rf /opt/conda/share/man/* && \
+    # Remove tests
+    find /opt/conda -name "tests" -type d -exec rm -rf {} +; true && \
+    find /opt/conda -name "test" -type d -exec rm -rf {} +; true && \
+    # Remove unnecessary Python cache files
+    find /opt/conda -name "__pycache__" -type d -exec rm -rf {} +; true && \
+    find /opt/conda -name "*.pyc" -delete && \
+    # Remove examples
+    find /opt/conda -name "examples" -type d -exec rm -rf {} +; true && \
+    # Remove unused files from large packages
+    rm -rf /opt/conda/lib/python*/site-packages/rdkit/Docs && \
+    rm -rf /opt/conda/lib/python*/site-packages/rdkit/Contrib && \
+    rm -rf /opt/conda/lib/python*/site-packages/pymol/data/movies && \
+    # Remove CUDA files if not using GPU
+    find /opt/conda -name "*_cuda*" -delete; true && \
+    find /opt/conda -name "*cublas*" -delete; true && \
+    find /opt/conda -name "*cudnn*" -delete; true
+
 # Set working directory for your project
 WORKDIR /app
 

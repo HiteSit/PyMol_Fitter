@@ -75,7 +75,14 @@ def dock_minimize():
                 
             # Initialize Pymol_Docking
             docking_class = Pymol_Docking(str(protein_path), ligand_input, str(crystal_sdf_path), is_smiles)
-            docked_path, protein_prep_path , docked_log = docking_class.run_smina_docking(dock_mode, output_name)
+            docked_path, protein_prep_path, docked_log = docking_class.run_smina_docking(dock_mode, output_name)
+            
+            if docked_path is None or protein_prep_path is None:
+                return jsonify({
+                    "success": False,
+                    "message": "Docking failed: most probably there is a problem in the kekulization of the ligand. Try again from the SMILES.",
+                    "log": "Critical: No docking results found, smina output file was empty"
+                }), 500
             
             # Encode results
             with open(docked_path, "rb") as f:

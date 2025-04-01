@@ -28,7 +28,7 @@ from rdkit.Chem.EnumerateStereoisomers import (
 )
 
 # Local imports
-from .Protein_Preparation import ProteinPreparation_Protoss
+from .Protein_Preparation import ProteinPreparation_Protoss, ProteinPreparation_PDBFixer
 from .Protein_Minimization import minimize_complex
 from .CDPK_Utils import CDPK_Runner
 
@@ -79,38 +79,41 @@ class Pymol_Docking:
             return Path(tmp_file.name)
         
     def prepare_protein(self) -> Path:
-        protein_basename: str = self.protein_pdb.stem
-        
-        protein_FILT = self.filter_protein(self.protein_pdb)
-        protein_PREP: Path = self.workdir / f"{protein_basename}_Prep.pdb"
-        
-        pp = ProteinPreparation_Protoss()
-        prepared_protein = pp(protein_FILT, protein_PREP)
-        
-        self.protein_preared = prepared_protein
-        return prepared_protein
-
+        try:
+            protein_basename: str = self.protein_pdb.stem
+            
+            protein_FILT = self.filter_protein(self.protein_pdb)
+            protein_PREP: Path = self.workdir / f"{protein_basename}_Prep.pdb"
+            
+            pp = ProteinPreparation_Protoss()
+            prepared_protein = pp(protein_FILT, protein_PREP)
+            
+            self.protein_preared = prepared_protein
+            return prepared_protein
+        except Exception as e:
+            logger.warning("Error in prepare_protein: Protoss failed")
+            logger.info("Trying PDBFixer")
+            pp = ProteinPreparation_PDBFixer()
+            prepared_protein = pp(protein_FILT, protein_PREP)
+            
+            self.protein_preared = prepared_protein
+            return prepared_protein
+                
     @staticmethod
     def cdpk_fixer(input_sdf: Path, TMP_basename: str, mode: Literal["Dock", "Minimize"]) -> None:
-        TMP_fixed_sdf = Path(gettempdir()) / "TMP_fixed.sdf"
-        
-        supplier = rdChem.SDMolSupplier(input_sdf.as_posix())
-        writer = rdChem.SDWriter(TMP_fixed_sdf.as_posix())
-        for mol in supplier:
-            mol.SetProp("_Name", TMP_basename)
-            writer.write(mol)
-        writer.close()
+        TMP_fixed_sdf = NamedTemporaryFile(suffix=".sdf", delete=False)
         
         if mode == "Dock":
             cdpk_runner = CDPK_Runner(standardize=True, protonate=True, gen3d=True)
-            cdpk_runner.prepare_ligands(TMP_fixed_sdf, TMP_fixed_sdf)
+            cdpk_runner.prepare_ligands(input_sdf, TMP_fixed_sdf.name)
             
-            return TMP_fixed_sdf.resolve()
+            return Path(TMP_fixed_sdf.name)
+        
         elif mode == "Minimize":
             cdpk_runner = CDPK_Runner(standardize=True, protonate=True, gen3d=False)
-            cdpk_runner.prepare_ligands(TMP_fixed_sdf, TMP_fixed_sdf)
+            cdpk_runner.prepare_ligands(TMP_fixed_sdf.name, TMP_fixed_sdf.name)
             
-            return TMP_fixed_sdf.resolve()
+            return Path(TMP_fixed_sdf.name)
     
     def prepare_ligands(self, mode: Literal["Dock", "Minimize"]):
         
@@ -159,27 +162,11 @@ class Pymol_Docking:
             df.reset_index(drop=False, inplace=True)
             bool_columns = df.select_dtypes(include=[bool]).columns
             success_rate_series = df[bool_columns].mean(axis=1) * 100
-            success_rate_list = success_rate_series.tolist()
             success_rate_mean = round(np.mean(success_rate_series), 2)
-            
-            # # Read all molecules first
-            # mol_list = list(rdChem.SDMolSupplier(mol_pred.as_posix()))
-            
-            # # Create a temporary file path
-            # temp_path = mol_pred.parent / f"temp_{mol_pred.name}"
-            
-            # # Write to temporary file
-            # with rdChem.SDWriter(temp_path.as_posix()) as writer:
-            #     for pose, success_rate in zip(mol_list, success_rate_list):
-            #         pose.SetProp("Compliance", str(success_rate))  # Convert to string
-            #         writer.write(pose)
-            
-            # # Replace original file with temporary file
-            # temp_path.replace(mol_pred)
             
             return mol_pred, success_rate_mean
         except Exception as e:
-            logger.error(f"Error in pose buster processer: {e}")
+            logger.warning(f"Error in pose buster processer: {e}")
             return mol_pred, 0
             
     def run_smina_docking(self, mode: Literal["Dock", "Minimize"], docking_basename: str) -> Tuple[Path, Path]:
@@ -188,7 +175,11 @@ class Pymol_Docking:
         protein_PKA: Path = self.prepare_protein()
 
         # Fix the ligands
-        fixed_ligands, fixed_crystal = self.prepare_ligands(mode)
+        try:
+            fixed_ligands, fixed_crystal = self.prepare_ligands(mode)
+        except Exception as e:
+            logger.critical(f"Error in prepare_ligands: {e}")
+            return None, None, None
 
         # Define the output
         smina_output: Path = self.workdir / f"{docking_basename}.sdf"
@@ -221,12 +212,17 @@ class Pymol_Docking:
             print("Running docking")
             with open(smina_log, "w") as log_file:
                 subprocess.run(smina_lst, check=True, stdout=log_file, stderr=log_file)
+                
+        # Check the size of the output and check if it is > 0 bytes
+        if smina_output.stat().st_size == 0:
+            logger.critical("No docking results found, swap on docking mode")
+            return None, None, None
         
         logger.info("Running pose buster")
         smina_bustered, compliance_rate = self.pose_buster_processer(smina_output, fixed_crystal, protein_PKA)
         print(f"\n\nCompliance rate: {round(compliance_rate, 2)}\n\n")
         
-        return smina_bustered, protein_PKA, smina_log
+        return smina_output, protein_PKA, smina_log
 
     def run_complex_minimization(self, protein_prep: Path, docked_ligand: Path):
         # Get the mol object
