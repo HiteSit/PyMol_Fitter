@@ -10,4 +10,12 @@ services:
     restart: unless-stopped
     environment:
       - FLASK_APP=app.py
-      - FLASK_ENV=production 
+      - FLASK_ENV=production
+    # Add these lines for NVIDIA GPU support
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu, compute, utility]

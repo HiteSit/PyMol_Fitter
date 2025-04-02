@@ -103,7 +103,7 @@ def minimize_complex(prot_path: Union[str, Path], lig_mol: Chem.rdchem.Mol) -> D
         # Set up the system generator with appropriate forcefields
         system_generator: SystemGenerator = SystemGenerator(
             forcefields=['amber/ff14SB.xml', 'amber/tip3p_standard.xml'],
-            small_molecule_forcefield='openff-2.1.1',
+            small_molecule_forcefield='gaff-2.11',
             molecules=[ligand_mol],
             forcefield_kwargs=forcefield_kwargs
         )
