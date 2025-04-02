@@ -58,13 +58,6 @@ class Pymol_Docking:
         else:
             self.ligands_sdf: Path = Path(input_ligands)
             self.input_mode = "SDF"
-
-        # if os.path.exists(input_ligands):
-        #     self.ligands_sdf: Path = Path(input_ligands)
-        #     self.input_mode = "SDF"
-        # else:
-        #     self.ligands_smiles: str = input_ligands
-        #     self.input_mode = "SMILES"
     
     @staticmethod
     def filter_protein(protein_pdb: Path) -> Path:
@@ -100,22 +93,27 @@ class Pymol_Docking:
             return prepared_protein
                 
     @staticmethod
-    def cdpk_fixer(input_sdf: Path, TMP_basename: str, mode: Literal["Dock", "Minimize"]) -> None:
-        TMP_fixed_sdf = NamedTemporaryFile(suffix=".sdf", delete=False)
+    def cdpk_fixer(input_sdf: Path, mode: Literal["Dock", "Minimize"]) -> None:
+        TMP_fixed_sdf: _TemporaryFileWrapper[bytes] = NamedTemporaryFile(suffix=".sdf", delete=False)
         
         if mode == "Dock":
             cdpk_runner = CDPK_Runner(standardize=True, protonate=True, gen3d=True)
             cdpk_runner.prepare_ligands(input_sdf, TMP_fixed_sdf.name)
             
+            print(TMP_fixed_sdf.name)
+            
             return Path(TMP_fixed_sdf.name)
         
         elif mode == "Minimize":
             cdpk_runner = CDPK_Runner(standardize=True, protonate=True, gen3d=False)
-            cdpk_runner.prepare_ligands(TMP_fixed_sdf.name, TMP_fixed_sdf.name)
+            cdpk_runner.prepare_ligands(input_sdf, TMP_fixed_sdf.name)
+            
+            print(TMP_fixed_sdf.name)
             
             return Path(TMP_fixed_sdf.name)
     
     def prepare_ligands(self, mode: Literal["Dock", "Minimize"]):
+        assert mode in ["Dock", "Minimize"], "Mode must be either Dock or Minimize"
         
         def _rdkit_addhs(mol_path: Path):
             another_tmp = NamedTemporaryFile(suffix=".sdf", delete=False)
@@ -133,7 +131,7 @@ class Pymol_Docking:
             if self.input_mode == "SDF":
                 logger.info("Preparing ligands from SDF")
                 fixed_crystal = self.crystal_sdf.resolve()
-                fixed_ligands = self.cdpk_fixer(self.ligands_sdf, "ligand", mode)
+                fixed_ligands = self.cdpk_fixer(self.ligands_sdf, mode)
             
             elif self.input_mode == "SMILES":
                 TMP_SMILES_SDF = Path(gettempdir()) / "TMP_SMILES.sdf"
@@ -142,14 +140,14 @@ class Pymol_Docking:
                 dm.to_sdf(mol, TMP_SMILES_SDF)
                 
                 fixed_crystal = self.crystal_sdf.resolve()
-                fixed_ligands = self.cdpk_fixer(TMP_SMILES_SDF, "ligand", mode)
+                fixed_ligands = self.cdpk_fixer(TMP_SMILES_SDF, mode)
                 
             return _rdkit_addhs(fixed_ligands), fixed_crystal
             
         elif mode == "Minimize":
             logger.info("Preparing ligands from SDF")
             fixed_crystal = self.crystal_sdf.resolve()
-            fixed_ligands = self.cdpk_fixer(self.ligands_sdf, "ligand", mode)
+            fixed_ligands = self.cdpk_fixer(self.ligands_sdf, mode)
             
             return _rdkit_addhs(fixed_ligands), fixed_crystal
         
@@ -219,8 +217,13 @@ class Pymol_Docking:
             return None, None, None
         
         logger.info("Running pose buster")
-        smina_bustered, compliance_rate = self.pose_buster_processer(smina_output, fixed_crystal, protein_PKA)
+        _, compliance_rate = self.pose_buster_processer(smina_output, fixed_crystal, protein_PKA)
         print(f"\n\nCompliance rate: {round(compliance_rate, 2)}\n\n")
+        
+        smina_mol = dm.read_sdf(smina_output, sanitize=False)[0]
+        smina_mol.SetProp("_Name", "Ligand")
+        smina_mol.SetProp("Buster_Compliace", f"{compliance_rate}")
+        dm.to_sdf(smina_mol, smina_output)
         
         return smina_output, protein_PKA, smina_log
 
