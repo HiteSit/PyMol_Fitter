@@ -181,6 +181,44 @@ class PyMOLDockingClient:
         
         return result
     
+    def inplace_minimization(
+        self,
+        protein_file: Union[str, Path],
+        ligand: Union[str, Path, str],
+        output_dir: Union[str, Path] = "."
+    ):
+        
+        if not self.check_health():
+            raise ConnectionError("API is not healthy. Make sure the server is running and accessible.")
+        
+        protein_data = self._encode_file(protein_file)
+        ligand_data = self._encode_file(ligand)
+        
+        payload = {
+            "protein": protein_data,
+            "ligand": ligand_data
+        }
+        
+        response = requests.post(f"{self.base_url}/minimize", json=payload)
+        
+        if response.status_code != 200:
+            raise Exception(f"API call failed: {response.json().get('message', 'Unknown error')}")
+        
+        response_data = response.json()
+        
+        # Save the files
+        output_dir = Path(output_dir)
+        assert output_dir.exists(), f"Output directory {output_dir} does not exist"
+        
+        result = {}
+        
+        result["minimized_complex"] = self._decode_and_save(
+            response_data["minimized_complex"],
+            output_dir / "minimized_complex.pdb"
+        )
+        
+        return result
+    
     # def dock(self, 
     #          protein_file: Union[str, Path], 
     #          ligand: Union[str, Path, str], 

@@ -260,3 +260,51 @@ class Pymol_Docking:
         pdb_multistate.write(protein_complex)
         
         return protein_complex
+
+def outer_minimization(protein_prep: Path, docked_ligand: Path, complex_path: Path):
+    
+    def filter_protein(protein_pdb: Path) -> Path:
+        struct_array = pdb.PDBFile.read(protein_pdb).get_structure(model=1)
+        struct_array_filter = struct_array[struc.filter_amino_acids(struct_array)]
+        
+        struct_out = pdb.PDBFile()
+        struct_out.set_structure(struct_array_filter)
+        
+        with NamedTemporaryFile(suffix=".pdb", delete=False) as tmp_file:
+            struct_out.write(tmp_file.name)
+            return Path(tmp_file.name)
+        
+    # Get the mol object
+    mols = dm.read_sdf(docked_ligand)
+    if not mols or len(mols) == 0:
+        raise ValueError(f"Failed to read any molecules from the ligand file: {docked_ligand}. Make sure it's a valid SDF file.")
+    
+    mol = mols[0]
+    
+    minimizer = minimize_complex(filter_protein(protein_prep), mol)
+    
+    pdb_string_before: str | float = minimizer["PDB_BEFORE"]
+    pdb_string_after: str | float = minimizer["PDB_AFTER"]
+    
+    def write_temp_pdb(content: str) -> str:
+        """Write PDB content to a temporary file and return the file path."""
+
+        tmp_file = NamedTemporaryFile(delete=False, suffix=".pdb")
+        with open(tmp_file.name, "w") as f:
+            f.write(content)
+        
+        return tmp_file.name
+
+    temp_pdb_path_before = write_temp_pdb(pdb_string_before)
+    temp_pdb_path_after = write_temp_pdb(pdb_string_after)
+
+    struct_1 = pdb.PDBFile.read(temp_pdb_path_before).get_structure(model=1)
+    struct_2 = pdb.PDBFile.read(temp_pdb_path_after).get_structure(model=1)
+    
+    multistate = struc.stack([struct_1, struct_2])
+    pdb_multistate = pdb.PDBFile()
+    pdb_multistate.set_structure(multistate)
+    
+    pdb_multistate.write(complex_path)
+    
+    return

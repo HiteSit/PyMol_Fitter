@@ -8,7 +8,7 @@ import json
 from typing import Dict, Union, Any
 
 # Import the PyMOL docking module
-from pymol_docking_src.Docking_Engine import Pymol_Docking
+from pymol_docking_src.Docking_Engine import Pymol_Docking, outer_minimization
 
 app = Flask(__name__)
 
@@ -124,7 +124,45 @@ def dock_minimize():
 @app.route('/minimize', methods=['POST'])
 def minimize():
     try:
-        pass
+        data = request.get_json()
+        
+        protein_data = data.get("protein")
+        ligand_data = data.get("ligand")
+        
+        if not protein_data:
+            return jsonify({"success": False, "message": "No protein data provided"}), 400
+        if not ligand_data:
+            return jsonify({"success": False, "message": "No ligand data provided"}), 400
+        
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_dir_path = Path(temp_dir)
+            
+            # Protein
+            protein_path = temp_dir_path / "protein.pdb"
+            if protein_data.startswith("data:"):
+                protein_data = protein_data.split(",")[1]
+            with open(protein_path, "wb") as f:
+                f.write(base64.b64decode(protein_data))
+            
+            # Ligand
+            ligand_path = temp_dir_path / "ligand.sdf"
+            if ligand_data.startswith("data:"):
+                ligand_data = ligand_data.split(",")[1]
+            with open(ligand_path, "wb") as f:
+                f.write(base64.b64decode(ligand_data))
+            
+            complex_path = temp_dir_path / "complex.pdb"
+            outer_minimization(protein_path, ligand_path, complex_path)
+            
+            with open(complex_path, "rb") as f:
+                complex_data = base64.b64encode(f.read()).decode("utf-8")
+                
+            return jsonify({
+                "success": True,
+                "message": "Minimization completed successfully",
+                "minimized_complex": complex_data
+            })
+            
     except Exception as e:
         logger.error(f"Error during minimization: {e}", exc_info=True)
         return jsonify({"success": False, "message": f"Error: {str(e)}"}), 500
