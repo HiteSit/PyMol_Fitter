@@ -23,7 +23,7 @@
     </rect>
    </property>
    <property name="currentIndex">
-    <number>0</number>
+    <number>1</number>
    </property>
    <widget class="QWidget" name="tab">
     <attribute name="title">
@@ -129,6 +129,37 @@
     <attribute name="title">
      <string>Tab 2</string>
     </attribute>
+    <widget class="QWidget" name="verticalLayoutWidget_3">
+     <property name="geometry">
+      <rect>
+       <x>150</x>
+       <y>60</y>
+       <width>301</width>
+       <height>141</height>
+      </rect>
+     </property>
+     <layout class="QVBoxLayout" name="verticalLayout_3">
+      <item>
+       <widget class="QComboBox" name="protein_chooser_MD"/>
+      </item>
+      <item>
+       <widget class="QComboBox" name="ligand_chooser_MD"/>
+      </item>
+     </layout>
+    </widget>
+    <widget class="QDialogButtonBox" name="buttonBox_MD">
+     <property name="geometry">
+      <rect>
+       <x>230</x>
+       <y>220</y>
+       <width>151</width>
+       <height>28</height>
+      </rect>
+     </property>
+     <property name="standardButtons">
+      <set>QDialogButtonBox::Cancel|QDialogButtonBox::Ok</set>
+     </property>
+    </widget>
    </widget>
   </widget>
  </widget>
