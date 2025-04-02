@@ -215,7 +215,7 @@ class Pymol_Docking:
                 
         # Check the size of the output and check if it is > 0 bytes
         if smina_output.stat().st_size == 0:
-            logger.critical("No docking results found, swap on docking mode")
+            logger.critical("Docking failed")
             return None, None, None
         
         logger.info("Running pose buster")
