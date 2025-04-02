@@ -20,9 +20,6 @@ COPY --chown=mambauser:mambauser docker/environment.yml /tmp/environment.yml
 RUN micromamba install -y -n base -f /tmp/environment.yml && \
     micromamba clean --all --yes
 
-# RUN micromamba remove -y -n base --force cudatoolkit && \
-#     micromamba clean --all --yes
-
 # Cleanup
 RUN micromamba clean --all --yes && \
     # Remove package cache
@@ -41,11 +38,7 @@ RUN micromamba clean --all --yes && \
     # Remove unused files from large packages
     rm -rf /opt/conda/lib/python*/site-packages/rdkit/Docs && \
     rm -rf /opt/conda/lib/python*/site-packages/rdkit/Contrib && \
-    rm -rf /opt/conda/lib/python*/site-packages/pymol/data/movies && \
-    # Remove CUDA files if not using GPU
-    find /opt/conda -name "*_cuda*" -delete; true && \
-    find /opt/conda -name "*cublas*" -delete; true && \
-    find /opt/conda -name "*cudnn*" -delete; true
+    rm -rf /opt/conda/lib/python*/site-packages/pymol/data/movies
 
 # Set working directory for your project
 WORKDIR /app
