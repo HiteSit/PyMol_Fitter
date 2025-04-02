@@ -158,6 +158,54 @@ def on_site_docking(protein_selection, ligand_selection, mode, outname: str, min
     except Exception as e:
         print(f"Error during docking: {e}")
 
+@cmd.extend
+def md_minimization(protein_selection, ligand_selection, outname: str = "minimized_complex"):
+    """
+    Perform molecular dynamics minimization on a protein-ligand complex.
+    
+    This function saves the selected protein and ligand as temporary files, 
+    runs the minimization process using the Docker server, and then loads
+    the minimized complex structure back into PyMOL.
+    
+    Parameters:
+    - protein_selection (str): The PyMOL selection string for the protein.
+    - ligand_selection (str): The PyMOL selection string for the ligand.
+    - outname (str): The name for the output complex file, default is "minimized_complex".
+    
+    Returns:
+    None. The result of the minimization is loaded into PyMOL.
+    """
+    # Check if the Docker server is running
+    if not docker_client.check_health():
+        print("Error: Docker server is not running. Please start the Docker server first.")
+        return
+    
+    protein_name = cmd.get_object_list(protein_selection)[0]
+    ligand_name = cmd.get_object_list(ligand_selection)[0]
+    assert_organic(ligand_name)
+    
+    to_save_protein = Path(gettempdir()) / f"{protein_name}.pdb"
+    to_save_ligand = Path(gettempdir()) / f"{ligand_name}.sdf"
+    
+    cmd.save(str(to_save_protein), protein_selection)
+    cmd.save(str(to_save_ligand), ligand_selection)
+    
+    try:
+        # Run minimization using the inplace_minimization function
+        print(f"Running MD minimization with {protein_name} and {ligand_name}")
+        results = docker_client.inplace_minimization(
+            protein_file=to_save_protein,
+            ligand=to_save_ligand,
+            output_dir="."
+        )
+        
+        # Load the results into PyMOL
+        cmd.load(str(results["minimized_complex"]), outname)
+        print(f"MD minimization completed successfully! Result loaded as {outname}")
+        
+    except Exception as e:
+        print(f"Error during MD minimization: {e}")
+
 # Define the dialog class that inherits from QDialog
 class PymolDockingDialog(QtWidgets.QDialog):
     def __init__(self, parent=None):
@@ -192,6 +240,8 @@ class PymolDockingDialog(QtWidgets.QDialog):
         self.buttonBox.accepted.connect(self.on_dialog_accepted)
         # Connect tab widget change signal
         self.tabWidget.currentChanged.connect(self.on_tab_changed)
+        # Connect buttonBox_MD for the second tab
+        self.buttonBox_MD.accepted.connect(self.on_md_dialog_accepted)
         # Note: buttonBox is assumed to be in GUI.ui and connected to accept/reject in the UI file
         
         # Initially set minimizer visibility based on the default mode selection
@@ -221,6 +271,14 @@ class PymolDockingDialog(QtWidgets.QDialog):
         self.protein_chooser_1.addItems(loaded_objects)
         self.protein_chooser_2.addItems(loaded_objects)
         self.ligand_chooser_1.addItems(loaded_objects)
+
+    def populate_md_select_list(self):
+        """Populate the MD tab protein and ligand selectors with available options."""
+        loaded_objects = self._get_select_list()
+        self.protein_chooser_MD.clear()
+        self.ligand_chooser_MD.clear()
+        self.protein_chooser_MD.addItems(loaded_objects)
+        self.ligand_chooser_MD.addItems(loaded_objects)
 
     def choose_docking_modes(self):
         """Populate the docking mode chooser."""
@@ -332,7 +390,12 @@ class PymolDockingDialog(QtWidgets.QDialog):
             # You could refresh the UI here if needed
             self.populate_ligand_select_list()
         elif index == 1:
-            # Second tab (new functionality)
+            # Second tab (MD minimization)
+            logger.info("Switched to MD minimization tab")
+            # Initialize MD tab functionality
+            self.populate_md_select_list()
+        elif index == 2:
+            # Third tab (new functionality)
             logger.info("Switched to second tab")
             # Initialize any second tab functionality here
             
@@ -345,6 +408,25 @@ class PymolDockingDialog(QtWidgets.QDialog):
         minimizer_visible = (modality == "In-Site" and mode == "Minimize")
         self.minimizer.setVisible(minimizer_visible)
         logger.info(f"Mode changed to {mode}, minimizer visibility set to {minimizer_visible}")
+
+    def md_minimizer_wrapper(self):
+        """Wrapper for MD minimization."""
+        protein = self.protein_chooser_MD.currentText()
+        ligand = self.ligand_chooser_MD.currentText()
+        outname = "minimized_complex"  # Default name, can be edited later
+        logger.info("Running MD minimization...")
+        md_minimization(protein, ligand, outname)
+    
+    def on_md_dialog_accepted(self):
+        """Handle dialog acceptance for MD tab."""
+        # Check if the Docker server is running
+        if not docker_client.check_health():
+            print("Error: Docker server is not running. Please start the Docker server first.")
+            return
+        
+        # Call the MD minimizer wrapper
+        self.md_minimizer_wrapper()
+        logger.info("MD minimization selected")
 
 # Plugin initialization for PyMOL
 def __init_plugin__(app=None):
