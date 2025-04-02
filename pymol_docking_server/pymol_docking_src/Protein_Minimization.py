@@ -51,115 +51,123 @@ def minimize_complex(prot_path: Union[str, Path], lig_mol: Chem.rdchem.Mol) -> D
     4. Performs energy minimization on the complex
     5. Returns the minimized structure as a PDB string
     
-    Parameters
-    ----------
-    prot_path : Union[str, Path]
-        Path to the protein PDB file
-    lig_mol : rdkit.Chem.rdchem.Mol
-        RDKit molecule object representing the ligand
+    Parameters:
+        prot_path: Path to the protein PDB file
+        lig_mol: RDKit molecule object representing the ligand
         
-    Returns
-    -------
-    Dict[str, Union[str, float]]
+    Returns:
         Dictionary containing:
         - "PDB_BEFORE": PDB string of the initial complex
         - "PDB_AFTER": PDB string of the minimized complex
-        - "energy_before_min": Energy before minimization (kJ/mol)
-        - "energy_after_min": Energy after minimization (kJ/mol)
+        - "delta_energy": Energy difference before/after minimization (kJ/mol)
+        
+    Raises:
+        FileNotFoundError: If the protein file doesn't exist
+        ValueError: If the ligand molecule is invalid
+        RuntimeError: If the minimization process fails
     """
-    # Fix the protein
-    fixer: PDBFixer = PDBFixer(str(prot_path))
-    fixer.removeHeterogens(keepWater=False)
-    fixer.findMissingResidues()
-    fixer.findMissingAtoms()
-    fixer.findNonstandardResidues()
-    fixer.replaceNonstandardResidues()
-
-    fixer.addMissingAtoms()
-    fixer.addMissingHydrogens(7.4)
+    # Check if protein file exists
+    if not os.path.exists(str(prot_path)):
+        raise FileNotFoundError(f"Protein file not found: {prot_path}")
     
-    # Parse the ligand
-    ligand_mol: Molecule = Molecule.from_rdkit(lig_mol)
-    lig_top = ligand_mol.to_topology()
-    
-    # Merge the ligand into the protein
-    modeller: Modeller = Modeller(fixer.topology, fixer.positions)
-    modeller.add(lig_top.to_openmm(), lig_top.get_positions().to_openmm())
-    
-    # Create the forcefield
-    forcefield_kwargs: Dict[str, Any] = { 
-        'constraints': app.HBonds, 
-        # 'rigidWater': True, 
-        # 'removeCMMotion': False, 
-        'hydrogenMass': 4*unit.amu 
-    }
-    
-    system_generator: SystemGenerator = SystemGenerator(
-        forcefields=['amber/ff14SB.xml', 'amber/tip3p_standard.xml'],
-        small_molecule_forcefield='gaff-2.11',
-        molecules=[ligand_mol],
-        forcefield_kwargs=forcefield_kwargs
-    )
-    
-    system: System = system_generator.create_system(modeller.topology)
-    integrator: LangevinIntegrator = LangevinIntegrator(
-        300 * unit.kelvin,
-        1 / unit.picosecond,
-        0.002 * unit.picoseconds,
-    )
+    # Validate ligand molecule
+    if lig_mol is None or lig_mol.GetNumAtoms() == 0:
+        raise ValueError("Invalid ligand molecule: molecule is None or empty")
     
     try:
-        platform: Platform = Platform.getPlatformByName('CUDA')
-        proprieties: Dict[str, str] = {'Precision': 'mixed', 'CudaDeviceIndex': "0"}
-    except Exception as e:
-        platform: Platform = Platform.getPlatformByName('CPU')
-        proprieties: Dict[str, str] = {}
+        # Fix the protein
+        fixer: PDBFixer = PDBFixer(str(prot_path))
+        fixer.removeHeterogens(keepWater=False)
+        fixer.findMissingResidues()
+        fixer.findMissingAtoms()
+        fixer.findNonstandardResidues()
+        fixer.replaceNonstandardResidues()
 
-    simulation: Simulation = Simulation(
-        modeller.topology, 
-        system,
-        integrator, 
-        platform=platform, 
-        platformProperties=proprieties
-    )
-    
-    # Set context
-    context: Context = simulation.context
-    context.setPositions(modeller.positions)
-    
-    # Minimize
-    min_state: State = simulation.context.getState(getEnergy=True, getPositions=True)
-    energy_before_min: UnitQuantity = min_state.getPotentialEnergy()
-    simulation.minimizeEnergy()
-    min_state = simulation.context.getState(getEnergy=True, getPositions=True)
-    energy_after_min: UnitQuantity = min_state.getPotentialEnergy()
-    
-    # with io.StringIO() as pdb_string:
-    #     PDBFile.writeHeader(simulation.topology, pdb_string)
-    #     PDBFile.writeModel(modeller.topology, modeller.positions, pdb_string, modelIndex=1)
-    #     PDBFile.writeModel(simulation.topology, min_state.getPositions(), pdb_string, modelIndex=2)
-    #     PDBFile.writeFooter(simulation.topology, pdb_string)
-    #     PDB_MIN = pdb_string.getvalue()
+        fixer.addMissingAtoms()
+        fixer.addMissingHydrogens(7.4)
         
-    with io.StringIO() as PDB_before:
-        PDBFile.writeFile(modeller.topology, modeller.positions, PDB_before)
-        PDB_BEFORE: str = PDB_before.getvalue()
-    
-    with io.StringIO() as PDB_after:
-        PDBFile.writeFile(simulation.topology, min_state.getPositions(), PDB_after)
-        PDB_AFTER: str = PDB_after.getvalue()
-    
-    # Get the energies
-    energy_before_min: float = energy_before_min.value_in_unit(unit.kilojoule_per_mole)
-    energy_after_min: float = energy_after_min.value_in_unit(unit.kilojoule_per_mole)
-    
-    delta_energy = energy_after_min - energy_before_min
-    
-    return {
-        "PDB_BEFORE": PDB_BEFORE,
-        "PDB_AFTER": PDB_AFTER,
-        "delta_energy": round(delta_energy, 2)
-    }
+        # Parse the ligand
+        ligand_mol: Molecule = Molecule.from_rdkit(lig_mol)
+        lig_top = ligand_mol.to_topology()
+        
+        # Merge the ligand into the protein
+        modeller: Modeller = Modeller(fixer.topology, fixer.positions)
+        modeller.add(lig_top.to_openmm(), lig_top.get_positions().to_openmm())
+        
+        # Create the forcefield
+        forcefield_kwargs: Dict[str, Any] = { 
+            'constraints': app.HBonds, 
+            'hydrogenMass': 4*unit.amu 
+        }
+        
+        # Set up the system generator with appropriate forcefields
+        system_generator: SystemGenerator = SystemGenerator(
+            forcefields=['amber/ff14SB.xml', 'amber/tip3p_standard.xml'],
+            small_molecule_forcefield='gaff-2.11',
+            molecules=[ligand_mol],
+            forcefield_kwargs=forcefield_kwargs
+        )
+        
+        # Create the system for simulation
+        system: System = system_generator.create_system(modeller.topology)
+        integrator: LangevinIntegrator = LangevinIntegrator(
+            300 * unit.kelvin,
+            1 / unit.picosecond,
+            0.002 * unit.picoseconds,
+        )
+        
+        # Try to use CUDA, fall back to CPU if not available
+        try:
+            platform: Platform = Platform.getPlatformByName('CUDA')
+            proprieties: Dict[str, str] = {'Precision': 'mixed', 'CudaDeviceIndex': "0"}
+        except Exception:
+            platform: Platform = Platform.getPlatformByName('CPU')
+            proprieties: Dict[str, str] = {}
+
+        # Set up the simulation environment
+        simulation: Simulation = Simulation(
+            modeller.topology, 
+            system,
+            integrator, 
+            platform=platform, 
+            platformProperties=proprieties
+        )
+        
+        # Set up the context and perform minimization
+        context: Context = simulation.context
+        context.setPositions(modeller.positions)
+        
+        # Minimize and get energies
+        min_state: State = simulation.context.getState(getEnergy=True, getPositions=True)
+        energy_before_min: UnitQuantity = min_state.getPotentialEnergy()
+        
+        # Perform energy minimization
+        simulation.minimizeEnergy()
+        min_state = simulation.context.getState(getEnergy=True, getPositions=True)
+        energy_after_min: UnitQuantity = min_state.getPotentialEnergy()
+        
+        # Generate PDB strings for before and after states
+        with io.StringIO() as PDB_before:
+            PDBFile.writeFile(modeller.topology, modeller.positions, PDB_before)
+            PDB_BEFORE: str = PDB_before.getvalue()
+        
+        with io.StringIO() as PDB_after:
+            PDBFile.writeFile(simulation.topology, min_state.getPositions(), PDB_after)
+            PDB_AFTER: str = PDB_after.getvalue()
+        
+        # Calculate energy values and difference
+        energy_before_min_val: float = energy_before_min.value_in_unit(unit.kilojoule_per_mole)
+        energy_after_min_val: float = energy_after_min.value_in_unit(unit.kilojoule_per_mole)
+        delta_energy = energy_after_min_val - energy_before_min_val
+        
+        return {
+            "PDB_BEFORE": PDB_BEFORE,
+            "PDB_AFTER": PDB_AFTER,
+            "delta_energy": round(delta_energy, 2)
+        }
+        
+    except Exception as e:
+        raise RuntimeError(f"Error during complex minimization: {str(e)}") from e
 
 def assign_bond_orders_from_smiles(
     pdb_input: Union[str, Path, io.StringIO], 

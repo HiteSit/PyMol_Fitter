@@ -7,6 +7,9 @@ from typing import Dict, Union, Any, Optional, Tuple
 class PyMOLDockingClient:
     """
     Client for interacting with the PyMOL Docking Docker API.
+    
+    This client provides methods to communicate with the PyMOL Docking server
+    for molecular docking and minimization operations.
     """
     
     def __init__(self, base_url: str = "http://localhost:5000"):
@@ -14,25 +17,21 @@ class PyMOLDockingClient:
         Initialize the client with the base URL of the API.
         
         Parameters:
-        -----------
-        base_url : str
-            The base URL of the API, default is http://localhost:5000
+            base_url: The base URL of the API, default is http://localhost:5000
         """
         self.base_url = base_url
         
     def check_health(self) -> bool:
         """
-        Check if the API is healthy.
+        Check if the API is healthy and accessible.
         
         Returns:
-        --------
-        bool
             True if the API is healthy, False otherwise
         """
         try:
-            response = requests.get(f"{self.base_url}/health")
+            response = requests.get(f"{self.base_url}/health", timeout=5)
             return response.status_code == 200 and response.json().get("status") == "healthy"
-        except Exception:
+        except requests.RequestException:
             return False
             
     def _encode_file(self, file_path: Union[str, Path]) -> str:
@@ -40,41 +39,51 @@ class PyMOLDockingClient:
         Encode a file as base64.
         
         Parameters:
-        -----------
-        file_path : Union[str, Path]
-            Path to the file to encode
+            file_path: Path to the file to encode
             
         Returns:
-        --------
-        str
             Base64 encoded string of the file
+            
+        Raises:
+            FileNotFoundError: If the file does not exist
+            IOError: If there's an error reading the file
         """
-        with open(file_path, "rb") as f:
-            return base64.b64encode(f.read()).decode("utf-8")
+        file_path = Path(file_path)
+        if not file_path.exists():
+            raise FileNotFoundError(f"File not found: {file_path}")
+            
+        try:
+            with open(file_path, "rb") as f:
+                return base64.b64encode(f.read()).decode("utf-8")
+        except IOError as e:
+            raise IOError(f"Error reading file {file_path}: {e}") from e
             
     def _decode_and_save(self, base64_data: str, output_path: Union[str, Path]) -> Path:
         """
         Decode a base64 string and save it to a file.
         
         Parameters:
-        -----------
-        base64_data : str
-            Base64 encoded string
-        output_path : Union[str, Path]
-            Path to save the decoded file
+            base64_data: Base64 encoded string
+            output_path: Path to save the decoded file
             
         Returns:
-        --------
-        Path
             Path to the saved file
+            
+        Raises:
+            ValueError: If the base64 data is invalid
+            IOError: If there's an error writing to the file
         """
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         
-        with open(output_path, "wb") as f:
-            f.write(base64.b64decode(base64_data))
-            
-        return output_path
+        try:
+            with open(output_path, "wb") as f:
+                f.write(base64.b64decode(base64_data))
+            return output_path
+        except base64.binascii.Error as e:
+            raise ValueError(f"Invalid base64 data: {e}") from e
+        except IOError as e:
+            raise IOError(f"Error writing to file {output_path}: {e}") from e
 
     def dock_minimize(self,
                      protein_file: Union[str, Path],
@@ -89,135 +98,160 @@ class PyMOLDockingClient:
         Perform docking and optional minimization of a ligand against a protein.
         
         Parameters:
-        -----------
-        protein_file : Union[str, Path]
-            Path to the protein PDB file
-        ligand : Union[str, Path, str]
-            Path to the ligand SDF file or SMILES string
-        crystal_file : Union[str, Path]
-            Path to the crystal ligand SDF file for defining the binding site
-        is_smiles : bool
-            Whether the ligand is a SMILES string, default is False
-        minimize : bool
-            Whether to perform minimization after docking, default is False
-        dock_mode : str
-            Docking mode, either "Dock" or "Minimize", default is "Dock"
-        output_name : str
-            Base name for the output files, default is "docked"
-        output_dir : Union[str, Path]
-            Directory to save the output files, default is current directory
+            protein_file: Path to the protein PDB file
+            ligand: Path to the ligand SDF file or SMILES string
+            crystal_file: Path to the crystal ligand SDF file for binding site
+            is_smiles: Whether the ligand is a SMILES string
+            minimize: Whether to perform minimization after docking
+            dock_mode: Docking mode, either "Dock" or "Minimize"
+            output_name: Base name for the output files
+            output_dir: Directory to save the output files
             
         Returns:
-        --------
-        Dict[str, Path]
-            Dictionary with paths to the output files:
-            - "docked_ligand": Path to the docked ligand SDF file
-            - "prepared_protein": Path to the prepared protein PDB file
-            - "minimized_complex": Path to the minimized complex PDB file (if minimize=True)
+            Dictionary with paths to the output files
+            
+        Raises:
+            ConnectionError: If the server is not accessible
+            ValueError: If input validation fails
+            RuntimeError: If the server returns an error response
         """
         if not self.check_health():
             raise ConnectionError("API is not healthy. Make sure the server is running and accessible.")
         
+        # Validate inputs
+        if dock_mode not in ["Dock", "Minimize"]:
+            raise ValueError("dock_mode must be either 'Dock' or 'Minimize'")
+        
         # Prepare the request data
-        if is_smiles:
-            # If ligand is a SMILES string, use it directly
-            ligand_data = ligand
-        else:
-            # If ligand is a file path, encode it as base64
-            ligand_data = self._encode_file(ligand)
-        
-        protein_data = self._encode_file(protein_file)
-        crystal_data = self._encode_file(crystal_file)
-        
-        # Prepare the payload
-        payload = {
-            "protein": protein_data,
-            "ligand": ligand_data,
-            "crystal": crystal_data,
-            "is_smiles": is_smiles,
-            "minimize": minimize,
-            "dock_mode": dock_mode,
-            "output_name": output_name
-        }
-        
-        # Make the API call
-        response = requests.post(f"{self.base_url}/dock", json=payload)
-        
-        if response.status_code != 200:
-            raise Exception(f"API call failed: {response.json().get('message', 'Unknown error')}")
-        
-        response_data = response.json()
-        
-        # Save the returned files
-        output_dir = Path(output_dir)
-        output_dir.mkdir(parents=True, exist_ok=True)
-        
-        result = {}
-        
-        # Save the log
-        result["log"] = self._decode_and_save(
-            response_data["log"],
-            output_dir / f"{output_name}.log"
-        )
-        
-        # Save docked ligand
-        result["docked_ligand"] = self._decode_and_save(
-            response_data["docked_ligand"],
-            output_dir / f"{output_name}.sdf"
-        )
-        
-        # Save prepared protein
-        result["prepared_protein"] = self._decode_and_save(
-            response_data["prepared_protein"],
-            output_dir / f"{output_name}_prepared_protein.pdb"
-        )
-        
-        # Save minimized complex if available
-        if minimize and "minimized_complex" in response_data:
-            result["minimized_complex"] = self._decode_and_save(
-                response_data["minimized_complex"],
-                output_dir / f"{output_name}_complex.pdb"
+        try:
+            if is_smiles:
+                # If ligand is a SMILES string, use it directly
+                ligand_data = str(ligand)
+            else:
+                # If ligand is a file path, encode it as base64
+                ligand_data = self._encode_file(ligand)
+            
+            protein_data = self._encode_file(protein_file)
+            crystal_data = self._encode_file(crystal_file)
+            
+            # Prepare the payload
+            payload = {
+                "protein": protein_data,
+                "ligand": ligand_data,
+                "crystal": crystal_data,
+                "is_smiles": is_smiles,
+                "minimize": minimize,
+                "dock_mode": dock_mode,
+                "output_name": output_name
+            }
+            
+            # Make the API call
+            response = requests.post(f"{self.base_url}/dock", json=payload, timeout=3600)
+            
+            if response.status_code != 200:
+                error_message = response.json().get('message', 'Unknown error')
+                raise RuntimeError(f"API call failed: {error_message}")
+            
+            response_data = response.json()
+            
+            # Save the returned files
+            output_dir = Path(output_dir)
+            output_dir.mkdir(parents=True, exist_ok=True)
+            
+            result = {}
+            
+            # Save the log
+            result["log"] = self._decode_and_save(
+                response_data["log"],
+                output_dir / f"{output_name}.log"
             )
-        
-        return result
+            
+            # Save docked ligand
+            result["docked_ligand"] = self._decode_and_save(
+                response_data["docked_ligand"],
+                output_dir / f"{output_name}.sdf"
+            )
+            
+            # Save prepared protein
+            result["prepared_protein"] = self._decode_and_save(
+                response_data["prepared_protein"],
+                output_dir / f"{output_name}_prepared_protein.pdb"
+            )
+            
+            # Save minimized complex if available
+            if minimize and "minimized_complex" in response_data:
+                result["minimized_complex"] = self._decode_and_save(
+                    response_data["minimized_complex"],
+                    output_dir / f"{output_name}_complex.pdb"
+                )
+            
+            return result
+            
+        except FileNotFoundError as e:
+            raise ValueError(f"File not found: {e}") from e
+        except requests.RequestException as e:
+            raise ConnectionError(f"Network error: {e}") from e
     
     def inplace_minimization(
         self,
         protein_file: Union[str, Path],
-        ligand: Union[str, Path, str],
+        ligand: Union[str, Path],
         output_dir: Union[str, Path] = "."
-    ):
+    ) -> Dict[str, Path]:
+        """
+        Perform in-place minimization of a protein-ligand complex.
         
+        Parameters:
+            protein_file: Path to the protein PDB file
+            ligand: Path to the ligand SDF file
+            output_dir: Directory to save the output files
+            
+        Returns:
+            Dictionary with paths to the output files
+            
+        Raises:
+            ConnectionError: If the server is not accessible
+            ValueError: If input validation fails
+            RuntimeError: If the server returns an error response
+        """
         if not self.check_health():
             raise ConnectionError("API is not healthy. Make sure the server is running and accessible.")
         
-        protein_data = self._encode_file(protein_file)
-        ligand_data = self._encode_file(ligand)
-        
-        payload = {
-            "protein": protein_data,
-            "ligand": ligand_data
-        }
-        
-        response = requests.post(f"{self.base_url}/minimize", json=payload)
-        
-        if response.status_code != 200:
-            raise Exception(f"API call failed: {response.json().get('message', 'Unknown error')}")
-        
-        response_data = response.json()
-        
-        # Save the files
-        output_dir = Path(output_dir)
-        assert output_dir.exists(), f"Output directory {output_dir} does not exist"
-        
-        result = {}
-        
-        result["minimized_complex"] = self._decode_and_save(
-            response_data["minimized_complex"],
-            output_dir / "minimized_complex.pdb"
-        )
-        
-        return result
+        try:
+            protein_data = self._encode_file(protein_file)
+            ligand_data = self._encode_file(ligand)
+            
+            payload = {
+                "protein": protein_data,
+                "ligand": ligand_data
+            }
+            
+            response = requests.post(f"{self.base_url}/minimize", json=payload, timeout=3600)
+            
+            if response.status_code != 200:
+                error_message = response.json().get('message', 'Unknown error')
+                raise RuntimeError(f"API call failed: {error_message}")
+            
+            response_data = response.json()
+            
+            # Save the files
+            output_dir = Path(output_dir)
+            if not output_dir.exists():
+                raise ValueError(f"Output directory {output_dir} does not exist")
+            
+            result = {}
+            
+            result["minimized_complex"] = self._decode_and_save(
+                response_data["minimized_complex"],
+                output_dir / "minimized_complex.pdb"
+            )
+            
+            return result
+            
+        except FileNotFoundError as e:
+            raise ValueError(f"File not found: {e}") from e
+        except requests.RequestException as e:
+            raise ConnectionError(f"Network error: {e}") from e
     
     # def dock(self, 
     #          protein_file: Union[str, Path], 

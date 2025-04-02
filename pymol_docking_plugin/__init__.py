@@ -5,68 +5,76 @@ import logging
 from pymol.Qt import QtWidgets
 from pymol.Qt.utils import loadUi
 from pymol import cmd
+from typing import Optional, List, Dict, Union
 
 # Import the client for communicating with the Docker server
 from .client import PyMOLDockingClient
 
-# Create the client instance
-docker_client = PyMOLDockingClient("http://localhost:5000")
+# Create the client instance with configurable URL
+SERVER_URL = "http://localhost:5000"
+docker_client = PyMOLDockingClient(SERVER_URL)
 
+# Set up logging
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
-def assert_organic(selection):
+def assert_organic(selection: str) -> None:
     """
     Assert that the given PyMOL selection consists of only organic molecules.
 
     Parameters:
-    - selection (str): The PyMOL selection string to check.
+        selection: The PyMOL selection string to check.
 
     Raises:
-    - AssertionError: If the selection contains non-organic molecules.
+        AssertionError: If the selection contains non-organic molecules.
     """ 
     # Create a temporary selection for organic molecules
     cmd.select("organic_check", f"{selection} and organic")
 
-    # Get the total number of atoms in the original selection
+    # Compare atom counts to verify selection is organic
     total_atoms = cmd.count_atoms(selection)
-
-    # Get the number of atoms in the organic selection
     organic_atoms = cmd.count_atoms("organic_check")
 
-    # Check if the number of organic atoms is equal to the total number of atoms
-    assert organic_atoms == total_atoms, "Selection contains non-organic molecules."
-    logger.info(f"Selection {selection} contains only organic molecules.")
+    # Check if all atoms are organic
+    assert organic_atoms == total_atoms, f"Selection '{selection}' contains non-organic molecules."
+    logger.info(f"Selection '{selection}' contains only organic molecules.")
 
     # Delete the temporary selection
     cmd.delete("organic_check")
 
 @cmd.extend
-def off_site_docking(protein_selection, ligand_smiles, outname:str):
+def off_site_docking(protein_selection: str, ligand_smiles: str, outname: str) -> None:
     """
     Perform off-site docking using PyMOL protein selection and a SMILES string for the ligand.
     
-    This function uses the Docker server to perform the docking.
+    This function saves the protein selection to a temporary file, sends the data to the Docker
+    server for docking, and loads the results back into PyMOL.
     
     Parameters:
-    - protein_selection (str): The PyMOL selection string for the protein.
-    - ligand_smiles (str): The SMILES string for the ligand.
-    - outname (str): The base name for the output file.
+        protein_selection: The PyMOL selection string for the protein.
+        ligand_smiles: The SMILES string for the ligand.
+        outname: The base name for the output file.
+    
+    Returns:
+        None. The docked structure is loaded into PyMOL.
     """
-    # Check if the Docker server is running
+    # Check server connection
     if not docker_client.check_health():
         print("Error: Docker server is not running. Please start the Docker server first.")
         return
     
-    # Save the protein to a temporary file
-    protein_name = cmd.get_object_list(protein_selection)[0]
-    to_save_protein: Path = Path(gettempdir()) / f"{protein_name}.pdb"
-    cmd.save(to_save_protein.as_posix(), protein_selection)
-
-    # Define crystal file path (using "./Crystal.sdf" as specified)
-    crystal_file = Path("./Crystal.sdf")
-
     try:
-        # Run the docking process using the consolidated dock_minimize function
+        # Save the protein to a temporary file
+        protein_name = cmd.get_object_list(protein_selection)[0]
+        to_save_protein = Path(gettempdir()) / f"{protein_name}.pdb"
+        cmd.save(to_save_protein.as_posix(), protein_selection)
+
+        # Define crystal file path
+        crystal_file = Path("./Crystal.sdf")
+        if not crystal_file.exists():
+            print(f"Warning: Crystal file not found at {crystal_file}. Docking may fail.")
+
+        # Run the docking process
         print(f"Running docking with {protein_name} and SMILES: {ligand_smiles}")
         results = docker_client.dock_minimize(
             protein_file=to_save_protein,
@@ -84,55 +92,69 @@ def off_site_docking(protein_selection, ligand_smiles, outname:str):
         cmd.load(str(results["prepared_protein"]), f"{outname}_protein")
         print(f"Docking completed successfully! Results loaded as {outname} and {outname}_protein")
         
+    except FileNotFoundError as e:
+        print(f"Error: Required file not found - {e}")
+    except AssertionError as e:
+        print(f"Error: {e}")
     except Exception as e:
         print(f"Error during docking: {e}")
+        logger.exception("Detailed docking error:")
 
 @cmd.extend
-def on_site_docking(protein_selection, ligand_selection, mode, outname: str, minimization_flag: bool = False):
+def on_site_docking(protein_selection: str, ligand_selection: str, mode: str, 
+                   outname: str, minimization_flag: bool = False) -> None:
     """
-    Perform on-site docking using PyMOL selections for protein and ligand, and smina for docking or minimization.
+    Perform on-site docking using PyMOL selections for protein and ligand.
 
-    This function saves the selected protein and ligand as temporary files, runs the docking or minimization process
-    using the Docker server, and then loads the docked ligand structure back into PyMOL.
+    This function saves the selected protein and ligand as temporary files, runs 
+    the docking or minimization process using the Docker server, and loads the 
+    results back into PyMOL.
 
     Parameters:
-    - protein_selection (str): The PyMOL selection string for the protein.
-    - ligand_selection (str): The PyMOL selection string for the ligand.
-    - mode (str): The operation mode, either "Minimize" or "Dock".
-    - outname (str): The base name for the output file. The docked structure will be saved as "{outname}.sdf"
-                     and loaded into PyMOL with the same name.
-    - minimization_flag (bool): Whether to perform minimization after docking, default is False.
+        protein_selection: The PyMOL selection string for the protein.
+        ligand_selection: The PyMOL selection string for the ligand.
+        mode: The operation mode, either "Minimize" or "Dock".
+        outname: The base name for the output files.
+        minimization_flag: Whether to perform minimization after docking.
 
     Raises:
-    - AssertionError: If the mode is not one of the expected values ("Minimize" or "Dock").
+        AssertionError: If the mode is invalid or the ligand is not organic.
 
     Returns:
-    None. The result of the docking or minimization is loaded into PyMOL.
+        None. The result of the docking/minimization is loaded into PyMOL.
     """
-    # Check if the Docker server is running
+    # Check server connection
     if not docker_client.check_health():
         print("Error: Docker server is not running. Please start the Docker server first.")
         return
     
-    # Assert the mode
-    assert mode in ["Minimize", "Dock"]
-
-    protein_name = cmd.get_object_list(protein_selection)[0]
-    ligand_name = cmd.get_object_list(ligand_selection)[0]
-    assert_organic(ligand_name)
-
-    to_save_protein = Path(gettempdir()) / f"{protein_name}.pdb"
-    to_save_ligand = Path(gettempdir()) / f"{ligand_name}.sdf"
-
-    cmd.save(str(to_save_protein), protein_selection)
-    cmd.save(str(to_save_ligand), ligand_selection)
-
-    # Define crystal file path (using "./Crystal.sdf" as specified)
-    crystal_file = Path("./Crystal.sdf")
+    # Validate inputs
+    if mode not in ["Minimize", "Dock"]:
+        print(f"Error: Invalid mode '{mode}'. Must be 'Minimize' or 'Dock'.")
+        return
 
     try:
-        # Run docking using the consolidated dock_minimize function
-        print(f"Running {'docking with minimization' if minimization_flag else 'docking'} with {protein_name} and {ligand_name}")
+        # Get object names from selections
+        protein_name = cmd.get_object_list(protein_selection)[0]
+        ligand_name = cmd.get_object_list(ligand_selection)[0]
+        assert_organic(ligand_name)
+
+        # Create temp files
+        to_save_protein = Path(gettempdir()) / f"{protein_name}.pdb"
+        to_save_ligand = Path(gettempdir()) / f"{ligand_name}.sdf"
+
+        cmd.save(str(to_save_protein), protein_selection)
+        cmd.save(str(to_save_ligand), ligand_selection)
+
+        # Define crystal file path
+        crystal_file = Path("./Crystal.sdf")
+        if not crystal_file.exists():
+            print(f"Warning: Crystal file not found at {crystal_file}. Docking may fail.")
+
+        # Run docking
+        operation_type = "docking with minimization" if minimization_flag else mode.lower()
+        print(f"Running {operation_type} with {protein_name} and {ligand_name}")
+        
         results = docker_client.dock_minimize(
             protein_file=to_save_protein,
             ligand=to_save_ligand,
@@ -151,46 +173,53 @@ def on_site_docking(protein_selection, ligand_selection, mode, outname: str, min
         # If minimization was performed, load the minimized complex
         if minimization_flag and "minimized_complex" in results:
             cmd.load(str(results["minimized_complex"]), f"{outname}_complex")
-            print(f"Docking and minimization completed successfully! Results loaded as {outname}, {outname}_protein, and {outname}_complex")
+            print(f"Operation completed successfully! Results loaded as {outname}, {outname}_protein, and {outname}_complex")
         else:
-            print(f"Docking completed successfully! Results loaded as {outname} and {outname}_protein")
+            print(f"Operation completed successfully! Results loaded as {outname} and {outname}_protein")
             
+    except FileNotFoundError as e:
+        print(f"Error: File not found - {e}")
+    except AssertionError as e:
+        print(f"Error: {e}")
     except Exception as e:
-        print(f"Error during docking: {e}")
+        print(f"Error during {mode.lower()}: {e}")
+        logger.exception(f"Detailed {mode.lower()} error:")
 
 @cmd.extend
-def md_minimization(protein_selection, ligand_selection, outname: str = "minimized_complex"):
+def md_minimization(protein_selection: str, ligand_selection: str, outname: str = "minimized_complex") -> None:
     """
     Perform molecular dynamics minimization on a protein-ligand complex.
     
-    This function saves the selected protein and ligand as temporary files, 
-    runs the minimization process using the Docker server, and then loads
-    the minimized complex structure back into PyMOL.
+    This function saves the selected protein and ligand as temporary files, runs the
+    minimization process using the Docker server, and loads the minimized complex 
+    structure back into PyMOL.
     
     Parameters:
-    - protein_selection (str): The PyMOL selection string for the protein.
-    - ligand_selection (str): The PyMOL selection string for the ligand.
-    - outname (str): The name for the output complex file, default is "minimized_complex".
+        protein_selection: The PyMOL selection string for the protein.
+        ligand_selection: The PyMOL selection string for the ligand.
+        outname: The name for the output complex file.
     
     Returns:
-    None. The result of the minimization is loaded into PyMOL.
+        None. The minimized complex is loaded into PyMOL.
     """
-    # Check if the Docker server is running
+    # Check server connection
     if not docker_client.check_health():
         print("Error: Docker server is not running. Please start the Docker server first.")
         return
     
-    protein_name = cmd.get_object_list(protein_selection)[0]
-    ligand_name = cmd.get_object_list(ligand_selection)[0]
-    assert_organic(ligand_name)
-    
-    to_save_protein = Path(gettempdir()) / f"{protein_name}.pdb"
-    to_save_ligand = Path(gettempdir()) / f"{ligand_name}.sdf"
-    
-    cmd.save(str(to_save_protein), protein_selection)
-    cmd.save(str(to_save_ligand), ligand_selection)
-    
     try:
+        # Get object names from selections
+        protein_name = cmd.get_object_list(protein_selection)[0]
+        ligand_name = cmd.get_object_list(ligand_selection)[0]
+        assert_organic(ligand_name)
+        
+        # Create temp files
+        to_save_protein = Path(gettempdir()) / f"{protein_name}.pdb"
+        to_save_ligand = Path(gettempdir()) / f"{ligand_name}.sdf"
+        
+        cmd.save(str(to_save_protein), protein_selection)
+        cmd.save(str(to_save_ligand), ligand_selection)
+        
         # Run minimization using the inplace_minimization function
         print(f"Running MD minimization with {protein_name} and {ligand_name}")
         results = docker_client.inplace_minimization(
@@ -203,8 +232,13 @@ def md_minimization(protein_selection, ligand_selection, outname: str = "minimiz
         cmd.load(str(results["minimized_complex"]), outname)
         print(f"MD minimization completed successfully! Result loaded as {outname}")
         
+    except FileNotFoundError as e:
+        print(f"Error: File not found - {e}")
+    except AssertionError as e:
+        print(f"Error: {e}")
     except Exception as e:
         print(f"Error during MD minimization: {e}")
+        logger.exception("Detailed MD minimization error:")
 
 # Define the dialog class that inherits from QDialog
 class PymolDockingDialog(QtWidgets.QDialog):
