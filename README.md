@@ -87,7 +87,7 @@ The project is organized into three main components:
 2. Install the plugin from the Pymol-Plugin GUI using the URL:
     
     ```bash
-     https://github.com/HiteSit/Pymol_Fitter/blob/master/pymol_fitter_plugin.zip
+    https://github.com/HiteSit/PyMol_Fitter/blob/master/pymol_fitter_plugin.zip
     ```
     
     ![](./docs/img1.png)
