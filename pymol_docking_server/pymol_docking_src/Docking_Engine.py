@@ -405,35 +405,33 @@ class Pymol_Docking:
             logger.error(f"Error in run_smina_docking: {e}")
             return None, None, None
 
-    def run_complex_minimization(self, protein_prep: Path, docked_ligand: Path) -> Path:
+    def run_complex_minimization(self, protein_prep: Path, docked_ligand: Optional[Path] = None) -> Path:
         """
         Run molecular dynamics minimization on a protein-ligand complex.
 
         Args:
             protein_prep: Path to the prepared protein PDB file
-            docked_ligand: Path to the docked ligand SDF file
+            docked_ligand: Path to the docked ligand SDF file (optional)
 
         Returns:
             Path to the minimized complex PDB file
 
         Raises:
             FileNotFoundError: If input files don't exist
-            ValueError: If no molecules are found in the ligand file
+            ValueError: If no molecules are found in the ligand file when provided
             RuntimeError: If minimization fails
         """
         if not protein_prep.exists():
             raise FileNotFoundError(f"Protein file not found: {protein_prep}")
             
-        if not docked_ligand.exists():
-            raise FileNotFoundError(f"Ligand file not found: {docked_ligand}")
-        
         try:
-            # Get the mol object
-            mols = dm.read_sdf(docked_ligand)
-            if not mols or len(mols) == 0:
-                raise ValueError(f"No molecules found in ligand file: {docked_ligand}")
-                
-            mol = mols[0]
+            # Get the mol object if ligand is provided
+            mol = None
+            if docked_ligand is not None and docked_ligand.exists():
+                mols = dm.read_sdf(docked_ligand)
+                if not mols or len(mols) == 0:
+                    raise ValueError(f"No molecules found in ligand file: {docked_ligand}")
+                mol = mols[0]
             
             # Run minimization
             minimizer = minimize_complex(protein_prep, mol)
@@ -478,27 +476,24 @@ class Pymol_Docking:
 
 def outer_minimization(
     protein_prep: Path, 
-    docked_ligand: Path, 
-    complex_path: Path
+    docked_ligand: Optional[Path] = None, 
+    complex_path: Path = Path("minimized_complex.pdb")
 ) -> None:
     """
     Perform minimization of a protein-ligand complex and write to an output file.
 
     Args:
         protein_prep: Path to the prepared protein PDB file
-        docked_ligand: Path to the docked ligand SDF file
+        docked_ligand: Path to the docked ligand SDF file (optional)
         complex_path: Path where the minimized complex will be saved
 
     Raises:
-        FileNotFoundError: If input files don't exist
-        ValueError: If no molecules are found in the ligand file
+        FileNotFoundError: If protein file doesn't exist or ligand file doesn't exist when provided
+        ValueError: If no molecules are found in the ligand file when provided
         RuntimeError: If minimization fails
     """
     if not protein_prep.exists():
         raise FileNotFoundError(f"Protein file not found: {protein_prep}")
-        
-    if not docked_ligand.exists():
-        raise FileNotFoundError(f"Ligand file not found: {docked_ligand}")
     
     def filter_protein(protein_pdb: Path) -> Path:
         """Filter protein structure to keep only amino acids."""
@@ -513,12 +508,16 @@ def outer_minimization(
             return Path(tmp_file.name)
     
     try:
-        # Get the mol object
-        mols = dm.read_sdf(docked_ligand)
-        if not mols or len(mols) == 0:
-            raise ValueError(f"No molecules found in ligand file: {docked_ligand}")
-        
-        mol = mols[0]
+        # Get the mol object if ligand is provided
+        mol = None
+        if docked_ligand is not None and docked_ligand.exists():
+            if not docked_ligand.exists():
+                raise FileNotFoundError(f"Ligand file not found: {docked_ligand}")
+                
+            mols = dm.read_sdf(docked_ligand)
+            if not mols or len(mols) == 0:
+                raise ValueError(f"No molecules found in ligand file: {docked_ligand}")
+            mol = mols[0]
         
         # Filter the protein and run minimization
         filtered_protein = filter_protein(protein_prep)

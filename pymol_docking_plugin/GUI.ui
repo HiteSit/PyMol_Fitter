@@ -160,6 +160,45 @@
       <set>QDialogButtonBox::Cancel|QDialogButtonBox::Ok</set>
      </property>
     </widget>
+    <widget class="QCheckBox" name="protein_only_flag">
+     <property name="geometry">
+      <rect>
+       <x>150</x>
+       <y>30</y>
+       <width>200</width>
+       <height>20</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Protein-only minimization</string>
+     </property>
+    </widget>
+    <widget class="QLineEdit" name="output_name_MD">
+     <property name="geometry">
+      <rect>
+       <x>150</x>
+       <y>180</y>
+       <width>301</width>
+       <height>25</height>
+      </rect>
+     </property>
+     <property name="placeholderText">
+      <string>Output name (default: minimized_complex)</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="output_name_label">
+     <property name="geometry">
+      <rect>
+       <x>70</x>
+       <y>180</y>
+       <width>80</width>
+       <height>25</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Output Name:</string>
+     </property>
+    </widget>
    </widget>
   </widget>
  </widget>

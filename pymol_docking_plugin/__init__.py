@@ -186,7 +186,7 @@ def on_site_docking(protein_selection: str, ligand_selection: str, mode: str,
         logger.exception(f"Detailed {mode.lower()} error:")
 
 @cmd.extend
-def md_minimization(protein_selection: str, ligand_selection: str, outname: str = "minimized_complex") -> None:
+def md_minimization(protein_selection: str, ligand_selection: Optional[str] = None, outname: str = "minimized_complex") -> None:
     """
     Perform molecular dynamics minimization on a protein-ligand complex.
     
@@ -196,7 +196,7 @@ def md_minimization(protein_selection: str, ligand_selection: str, outname: str 
     
     Parameters:
         protein_selection: The PyMOL selection string for the protein.
-        ligand_selection: The PyMOL selection string for the ligand.
+        ligand_selection: The PyMOL selection string for the ligand (optional).
         outname: The name for the output complex file.
     
     Returns:
@@ -210,21 +210,27 @@ def md_minimization(protein_selection: str, ligand_selection: str, outname: str 
     try:
         # Get object names from selections
         protein_name = cmd.get_object_list(protein_selection)[0]
-        ligand_name = cmd.get_object_list(ligand_selection)[0]
-        assert_organic(ligand_name)
         
         # Create temp files
         to_save_protein = Path(gettempdir()) / f"{protein_name}.pdb"
-        to_save_ligand = Path(gettempdir()) / f"{ligand_name}.sdf"
-        
         cmd.save(str(to_save_protein), protein_selection)
-        cmd.save(str(to_save_ligand), ligand_selection)
+        
+        # Process ligand if provided
+        to_save_ligand = None
+        if ligand_selection:
+            ligand_name = cmd.get_object_list(ligand_selection)[0]
+            assert_organic(ligand_name)
+            to_save_ligand = Path(gettempdir()) / f"{ligand_name}.sdf"
+            cmd.save(str(to_save_ligand), ligand_selection)
+            print(f"Running MD minimization with {protein_name} and {ligand_name}")
+        else:
+            print(f"Running MD minimization with {protein_name} only")
         
         # Run minimization using the inplace_minimization function
-        print(f"Running MD minimization with {protein_name} and {ligand_name}")
         results = docker_client.inplace_minimization(
             protein_file=to_save_protein,
             ligand=to_save_ligand,
+            output_name=outname,
             output_dir="."
         )
         
@@ -249,6 +255,22 @@ class PymolDockingDialog(QtWidgets.QDialog):
         uifile = os.path.join(os.path.dirname(__file__), 'GUI.ui')
         loadUi(uifile, self)
         
+        # Create UI elements that might not be in the UI file
+        # Add protein-only checkbox if not in UI
+        if not hasattr(self, 'protein_only_flag'):
+            self.protein_only_flag = QtWidgets.QCheckBox("Protein-only minimization", self.tab_2)
+            self.protein_only_flag.setGeometry(150, 30, 200, 20)
+            
+        # Add output name field if not in UI
+        if not hasattr(self, 'output_name_MD'):
+            self.output_name_MD = QtWidgets.QLineEdit(self.tab_2)
+            self.output_name_MD.setGeometry(150, 180, 301, 25)
+            self.output_name_MD.setPlaceholderText("Output name (default: minimized_complex)")
+            
+        # Add labels if needed
+        self.output_name_label = QtWidgets.QLabel("Output Name:", self.tab_2)
+        self.output_name_label.setGeometry(70, 180, 80, 25)
+        
         # Check if the Docker server is running
         if not docker_client.check_health():
             self.setWindowTitle("PyMOL Docking - Docker Server Not Running")
@@ -272,6 +294,8 @@ class PymolDockingDialog(QtWidgets.QDialog):
         self.mode_chooser_2.currentIndexChanged.connect(self.clear_and_repopulate_selectors)
         self.mode_chooser.currentIndexChanged.connect(self.on_mode_changed)
         self.buttonBox.accepted.connect(self.on_dialog_accepted)
+        # Connect protein-only checkbox toggle event
+        self.protein_only_flag.toggled.connect(self.on_protein_only_toggled)
         # Connect tab widget change signal
         self.tabWidget.currentChanged.connect(self.on_tab_changed)
         # Connect buttonBox_MD for the second tab
@@ -313,6 +337,8 @@ class PymolDockingDialog(QtWidgets.QDialog):
         self.ligand_chooser_MD.clear()
         self.protein_chooser_MD.addItems(loaded_objects)
         self.ligand_chooser_MD.addItems(loaded_objects)
+        # Set the ligand_chooser visibility based on protein_only_flag
+        self.ligand_chooser_MD.setVisible(not self.protein_only_flag.isChecked())
 
     def choose_docking_modes(self):
         """Populate the docking mode chooser."""
@@ -446,11 +472,28 @@ class PymolDockingDialog(QtWidgets.QDialog):
     def md_minimizer_wrapper(self):
         """Wrapper for MD minimization."""
         protein = self.protein_chooser_MD.currentText()
-        ligand = self.ligand_chooser_MD.currentText()
-        outname = "minimized_complex"  # Default name, can be edited later
-        logger.info("Running MD minimization...")
-        md_minimization(protein, ligand, outname)
+        outname = self.output_name_MD.text() if self.output_name_MD.text() else "minimized_complex"
+        
+        # Only use ligand if protein_only_flag is not checked
+        ligand = None
+        if not self.protein_only_flag.isChecked():
+            ligand = self.ligand_chooser_MD.currentText()
+        
+        logger.info(f"Running MD minimization with output name: {outname}")
+        
+        if ligand:
+            logger.info(f"Using protein: {protein} and ligand: {ligand}")
+            md_minimization(protein, ligand, outname)
+        else:
+            logger.info(f"Using protein only: {protein}")
+            md_minimization(protein, None, outname)
     
+    def on_protein_only_toggled(self, checked):
+        """Handle the protein-only checkbox state change."""
+        # Show/hide ligand selector based on checkbox state
+        self.ligand_chooser_MD.setVisible(not checked)
+        logger.info(f"Protein-only minimization set to: {checked}")
+
     def on_md_dialog_accepted(self):
         """Handle dialog acceptance for MD tab."""
         # Check if the Docker server is running
