@@ -386,18 +386,18 @@ class Pymol_Docking:
             _, compliance_rate = self.pose_buster_processer(smina_output, fixed_crystal, protein_PKA)
             logger.info(f"Compliance rate: {round(compliance_rate, 2)}")
             
-            # Add compliance rate property to output molecule
-            try:
-                smina_mols = dm.read_sdf(smina_output, sanitize=False)
-                if not smina_mols or len(smina_mols) == 0:
-                    logger.warning("No molecules found in smina output")
-                else:
-                    smina_mol = smina_mols[0]
-                    smina_mol.SetProp("_Name", "Ligand")
-                    smina_mol.SetProp("Buster_Compliace", f"{compliance_rate}")
-                    dm.to_sdf(smina_mol, smina_output)
-            except Exception as e:
-                logger.warning(f"Error updating molecule properties: {e}")
+            # # Add compliance rate property to output molecule
+            # try:
+            #     smina_mols = dm.read_sdf(smina_output, sanitize=False)
+            #     if not smina_mols or len(smina_mols) == 0:
+            #         logger.warning("No molecules found in smina output")
+            #     else:
+            #         smina_mol = smina_mols[0]
+            #         smina_mol.SetProp("_Name", "Ligand")
+            #         smina_mol.SetProp("Buster_Compliace", f"{compliance_rate}")
+            #         dm.to_sdf(smina_mol, smina_output)
+            # except Exception as e:
+            #     logger.warning(f"Error updating molecule properties: {e}")
             
             return smina_output, protein_PKA, smina_log
             

@@ -1,8 +1,10 @@
 services:
-  pymol-docking-server:
+  pymol-docking-minimizer:
     build:
       context: ..
       dockerfile: docker/Dockerfile
+    image: hitesit/pymol-docking-minimizer:1.0.0
+    container_name: pymol-docking-minimizer
     ports:
       - "5000:5000"
     volumes:
@@ -11,11 +13,16 @@ services:
     environment:
       - FLASK_APP=app.py
       - FLASK_ENV=production
-    # Add these lines for NVIDIA GPU support
     deploy:
       resources:
         reservations:
           devices:
             - driver: nvidia
               count: 1
-              capabilities: [gpu, compute, utility]
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
