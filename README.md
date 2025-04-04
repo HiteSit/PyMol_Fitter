@@ -10,8 +10,8 @@ A powerful PyMOL plugin for molecular docking and minimization that leverages Do
     - Off-Site: Generate 3D conformers from SMILES strings
 - **Structure preparation and optimization**:
     - Automated protein preparation
-    - Ligand preparation and optimization
-    - MD-based minimization of protein-ligand complexes
+    - Automated ligand preparation and protonation
+    - OpenMM-powered minimization of protein-ligand complexes
 - **Evaluation and analysis**:
     - Pose assessment with PoseBusters
     - Detailed docking logs and scores
@@ -38,17 +38,13 @@ The project is organized into three main components:
 
 ### System Requirements
 
-- **Operating System**: Windows, macOS, or Linux
-- **RAM**: 8GB minimum, 16GB recommended
-- **CPU**: Multi-core processor recommended
 - **GPU**: NVIDIA GPU with CUDA support (optional, for faster calculations)
-- **Disk Space**: At least 5GB free space for Docker images and data
+- **Disk Space**: At least 10GB free space for Docker images and data
 
 ### Software Requirements
 
-- [Docker](https://www.docker.com/products/docker-desktop/) (version 20.10.0 or higher)
-- [PyMOL](https://pymol.org/) (version 2.5.0 or higher)
-- Python 3.7+
+- [Docker](https://www.docker.com/products/docker-desktop/)
+- [Pymol3](https://pymol.org/)
 
 ## 📥 Installation
 
@@ -57,34 +53,24 @@ The project is organized into three main components:
 1. Simply pull the container
     
     ```bash
-    docker pull hitesit/pymol-fitter-minimizer:1.0.0
+    docker pull hitesit/pymol-fitter-minimizer
     ```
     
 
 ### 1b. Set Up the Docker Container
 
-1. Install Docker Desktop for your operating system:
-    - [Docker Desktop for Windows](https://docs.docker.com/desktop/install/windows-install/)
-    - [Docker Desktop for Mac](https://docs.docker.com/desktop/install/mac-install/)
-    - [Docker Engine for Linux](https://docs.docker.com/engine/install/)
-2. Clone this repository:
+1. Clone this repository:
     
     ```bash
     git clone https://github.com/yourusername/pymol-fitter.git
     cd pymol-fitter
     ```
     
-3. Build and start the Docker container:
+2. Build and start the Docker container:
     
     ```bash
     cd docker
     docker-compose up -d
-    ```
-    
-4. Verify that the container is running:
-    
-    ```bash
-    docker ps | grep pymol-fitter-minimizer
     ```
     
 
@@ -97,14 +83,13 @@ The project is organized into three main components:
     ```
     
 2. Install the plugin from the Pymol-Plugin GUI using the URL:
-      
-   ```bash
-    https://github.com/HiteSit/Pymol_Fitter/blob/master/pymol_fitter_plugin.zip
+    
+    ```bash
+     https://github.com/HiteSit/Pymol_Fitter/blob/master/pymol_fitter_plugin.zip
     ```
-   
-   <p align="center">
-   <img src="./docs/img1.png" width="800">
-   </p>
+    
+    ![](./docs/img1.png)
+    
 
 ## 🚀 Usage Guide
 
@@ -252,10 +237,7 @@ Test the API directly:
 For development, you may want to mount your code directory into the Docker container:
 
 ```yaml
-# In docker-compose.yml
-volumes:
-  - ./data:/app/data
-  - ../pymol_fitter_server:/app
+# In docker-compose.ymlvolumes:  - ./data:/app/data  - ../pymol_fitter_server:/app
 ```
 
 This allows you to modify the server code without rebuilding the container.
@@ -320,6 +302,10 @@ This project utilizes several open-source tools and libraries:
 - [PoseBusters](https://github.com/OpenFreeEnergy/poseBusters)
 - [CDPK](https://github.com/molinfo-vienna/CDPKit)
 - [Flask](https://flask.palletsprojects.com/)
+
+## 📝 Documentation
+
+This documentation was created with assistance from [Claude 3.7](https://www.anthropic.com/claude), an AI assistant by Anthropic.
 
 ## 📄 License
 
