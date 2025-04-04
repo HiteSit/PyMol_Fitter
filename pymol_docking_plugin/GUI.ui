@@ -23,11 +23,11 @@
     </rect>
    </property>
    <property name="currentIndex">
-    <number>1</number>
+    <number>0</number>
    </property>
    <widget class="QWidget" name="tab">
     <attribute name="title">
-     <string>Tab 1</string>
+     <string>Docking</string>
     </attribute>
     <widget class="QComboBox" name="mode_chooser_2">
      <property name="geometry">
@@ -127,7 +127,7 @@
    </widget>
    <widget class="QWidget" name="tab_2">
     <attribute name="title">
-     <string>Tab 2</string>
+     <string>Minimization</string>
     </attribute>
     <widget class="QWidget" name="verticalLayoutWidget_3">
      <property name="geometry">

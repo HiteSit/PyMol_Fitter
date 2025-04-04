@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 from tempfile import gettempdir
 import logging
+import re
 from pymol.Qt import QtWidgets
 from pymol.Qt.utils import loadUi
 from pymol import cmd
@@ -472,27 +473,44 @@ class PymolDockingDialog(QtWidgets.QDialog):
     def md_minimizer_wrapper(self):
         """Wrapper for MD minimization."""
         protein = self.protein_chooser_MD.currentText()
+        
+        # Validate output name (allow only alphanumeric characters, underscore, and hyphen)
         outname = self.output_name_MD.text() if self.output_name_MD.text() else "minimized_complex"
+        if not re.match(r'^[a-zA-Z0-9_\-]+$', outname):
+            print(f"Error: Output name '{outname}' contains invalid characters. Using 'minimized_complex' instead.")
+            logger.warning(f"Invalid output name: {outname}. Using default.")
+            outname = "minimized_complex"
         
         # Only use ligand if protein_only_flag is not checked
         ligand = None
         if not self.protein_only_flag.isChecked():
             ligand = self.ligand_chooser_MD.currentText()
         
-        logger.info(f"Running MD minimization with output name: {outname}")
-        
+        # Provide clear feedback on what's being run
         if ligand:
-            logger.info(f"Using protein: {protein} and ligand: {ligand}")
+            print(f"Running MD minimization on protein-ligand complex...")
+            print(f"  - Protein: {protein}")
+            print(f"  - Ligand: {ligand}")
+            print(f"  - Output name: {outname}")
+            logger.info(f"Running protein-ligand minimization with output name: {outname}")
             md_minimization(protein, ligand, outname)
         else:
-            logger.info(f"Using protein only: {protein}")
+            print(f"Running MD minimization on protein only...")
+            print(f"  - Protein: {protein}")
+            print(f"  - Output name: {outname}")
+            logger.info(f"Running protein-only minimization with output name: {outname}")
             md_minimization(protein, None, outname)
     
     def on_protein_only_toggled(self, checked):
         """Handle the protein-only checkbox state change."""
         # Show/hide ligand selector based on checkbox state
         self.ligand_chooser_MD.setVisible(not checked)
-        logger.info(f"Protein-only minimization set to: {checked}")
+        if checked:
+            logger.info(f"Protein-only minimization mode activated")
+            print("Protein-only minimization mode activated")
+        else:
+            logger.info(f"Protein-ligand minimization mode activated")
+            print("Protein-ligand minimization mode activated")
 
     def on_md_dialog_accepted(self):
         """Handle dialog acceptance for MD tab."""
