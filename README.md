@@ -1,4 +1,4 @@
-# PyMOL Docking Plugin
+# PyMOL Fitter Plugin
 
 A powerful PyMOL plugin for molecular docking and minimization that leverages Docker containerization to provide robust cross-platform compatibility and consistent computational environments, especially beneficial for Windows users who often encounter dependency issues with computational chemistry software.
 
@@ -21,11 +21,11 @@ A powerful PyMOL plugin for molecular docking and minimization that leverages Do
 
 The project is organized into three main components:
 
-1. **PyMOL Plugin (Client)** - `pymol_docking_plugin/`
+1. **PyMOL Plugin (Client)** - `pymol_fitter_plugin/`
     - GUI interface integrated with PyMOL
     - Client code to communicate with the Docker server
     - No computational code - all calculations happen in the Docker container
-2. **Server Code** - `pymol_docking_server/`
+2. **Server Code** - `pymol_fitter_server/`
     - Flask API endpoints for docking and minimization
     - Computational code using smina, OpenMM, and other libraries
     - Functions for protein preparation, ligand preparation, and pose assessment
@@ -57,7 +57,7 @@ The project is organized into three main components:
 1. Simply pull the container
     
     ```bash
-    docker pull hitesit/pymol-docking-minimizer:1.0.0
+    docker pull hitesit/pymol-fitter-minimizer:1.0.0
     ```
     
 
@@ -70,8 +70,8 @@ The project is organized into three main components:
 2. Clone this repository:
     
     ```bash
-    git clone https://github.com/yourusername/pymol-docking.git
-    cd pymol-docking
+    git clone https://github.com/yourusername/pymol-fitter.git
+    cd pymol-fitter
     ```
     
 3. Build and start the Docker container:
@@ -84,7 +84,7 @@ The project is organized into three main components:
 4. Verify that the container is running:
     
     ```bash
-    docker ps | grep pymol-docking-minimizer
+    docker ps | grep pymol-fitter-minimizer
     ```
     
 
@@ -99,7 +99,7 @@ The project is organized into three main components:
 2. Install the plugin from the Pymol-Plugin GUI using the URL:
       
    ```bash
-    https://github.com/HiteSit/Pymol_Docking/blob/master/pymol_docking_plugin.zip
+    https://github.com/HiteSit/Pymol_Fitter/blob/master/pymol_fitter_plugin.zip
     ```
    
    <p align="center">
@@ -111,7 +111,7 @@ The project is organized into three main components:
 ### Starting the Plugin
 
 1. Open PyMOL
-2. The plugin will be available in the Plugin menu as "Pymol Docking"
+2. The plugin will be available in the Plugin menu as "Pymol Fitter"
 3. Click on it to open the plugin interface
 
 ### In-Site Docking (Using 3D Structures)
@@ -193,7 +193,7 @@ The server exposes the following RESTful API endpoints:
 1. **Docker Container Not Running**:
     
     ```bash
-    docker ps | grep pymol-docking-minimizer
+    docker ps | grep pymol-fitter-minimizer
     ```
     
     If no results, try restarting the container:
@@ -214,7 +214,7 @@ Test the API directly:
     If not responding, check Docker logs:
     
     ```bash
-    docker logs pymol-docking-minimizer
+    docker logs pymol-fitter-minimizer
     ```
     
 3. **Plugin Not Appearing in PyMOL**:
@@ -231,8 +231,8 @@ Test the API directly:
 
 ### Adding New Server-side Features
 
-1. Add new computational code to `pymol_docking_server/pymol_docking_src/`
-2. Expose functionality via new endpoints in `pymol_docking_server/app.py`
+1. Add new computational code to `pymol_fitter_server/pymol_fitter_src/`
+2. Expose functionality via new endpoints in `pymol_fitter_server/app.py`
 3. Rebuild the Docker container:
     
     ```bash
@@ -242,9 +242,9 @@ Test the API directly:
 
 ### Extending the Client
 
-1. Update `pymol_docking_plugin/client.py` to call new API endpoints
-2. Add UI elements to `pymol_docking_plugin/GUI.ui` if needed
-3. Add new PyMOL commands in `pymol_docking_plugin/__init__.py`
+1. Update `pymol_fitter_plugin/client.py` to call new API endpoints
+2. Add UI elements to `pymol_fitter_plugin/GUI.ui` if needed
+3. Add new PyMOL commands in `pymol_fitter_plugin/__init__.py`
 4. Test the new functionality with the Docker server running
 
 ### Development Environment
@@ -255,7 +255,7 @@ For development, you may want to mount your code directory into the Docker conta
 # In docker-compose.yml
 volumes:
   - ./data:/app/data
-  - ../pymol_docking_server:/app
+  - ../pymol_fitter_server:/app
 ```
 
 This allows you to modify the server code without rebuilding the container.
@@ -293,11 +293,11 @@ PoseBusters is used to evaluate docking poses by checking:
 If you use this plugin in your research, please cite:
 
 ```
-@software{pymol_docking_plugin,
+@software{pymol_fitter_plugin,
   author = {Your Name},
-  title = {PyMOL Docking Plugin},
+  title = {PyMOL Fitter Plugin},
   year = {2023},
-  url = {https://github.com/yourusername/pymol-docking}
+  url = {https://github.com/yourusername/pymol-fitter}
 }
 ```
 
