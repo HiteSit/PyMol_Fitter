@@ -44,13 +44,13 @@ RUN micromamba clean --all --yes && \
 WORKDIR /app
 
 # Create the source directory
-RUN mkdir -p /app/pymol_docking_src
+RUN mkdir -p /app/pymol_fitter_src
 
 # Copy the server computational code
-COPY --chown=mambauser:mambauser ../pymol_docking_server/pymol_docking_src/*.py /app/pymol_docking_src/
+COPY --chown=mambauser:mambauser ../pymol_fitter_server/pymol_fitter_src/*.py /app/pymol_fitter_src/
 
 # Copy the Flask application
-COPY --chown=mambauser:mambauser ../pymol_docking_server/app.py /app/
+COPY --chown=mambauser:mambauser ../pymol_fitter_server/app.py /app/
 
 # Create a data directory for output files
 RUN mkdir -p /app/data

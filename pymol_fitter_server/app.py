@@ -8,7 +8,7 @@ import json
 from typing import Dict, Union, Any
 
 # Import the PyMOL docking module
-from pymol_docking_src.Docking_Engine import Pymol_Docking, outer_minimization
+from pymol_fitter_src.Docking_Engine import Pymol_Docking, outer_minimization
 
 app = Flask(__name__)
 

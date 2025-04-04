@@ -765,7 +765,7 @@ class PymolDockingDialog(QtWidgets.QDialog):
 def __init_plugin__(app=None):
     """Add the plugin to PyMOL's menu."""
     from pymol.plugins import addmenuitemqt
-    addmenuitemqt('Pymol Docking', run_plugin_gui)
+    addmenuitemqt('Pymol Fitter', run_plugin_gui)
 
 def run_plugin_gui():
     """Create and show the dialog when the menu item is clicked."""

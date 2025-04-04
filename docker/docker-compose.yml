@@ -1,10 +1,10 @@
 services:
-  pymol-docking-minimizer:
+  pymol-fitter:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    image: hitesit/pymol-docking-minimizer:1.0.0
-    container_name: pymol-docking-minimizer
+    image: hitesit/pymol-fitter
+    container_name: pymol-fitter
     ports:
       - "5000:5000"
     volumes:
