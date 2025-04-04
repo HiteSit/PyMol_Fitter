@@ -30,8 +30,8 @@ env/
 .ipynb_checkpoints
 
 # IDE specific files
-.idea/
-.vscode/
+*.idea/
+*.vscode/
 *.swp
 *.swo
 .cursor/
