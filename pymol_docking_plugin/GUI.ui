@@ -60,7 +60,21 @@
      </property>
      <layout class="QVBoxLayout" name="verticalLayout_2">
       <item>
-       <widget class="QComboBox" name="protein_chooser_2"/>
+       <layout class="QHBoxLayout" name="protein_state_layout_2">
+        <item>
+         <widget class="QComboBox" name="protein_chooser_2"/>
+        </item>
+        <item>
+         <widget class="QLabel" name="protein_state_label_2">
+          <property name="text">
+           <string>State:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QComboBox" name="protein_state_chooser_2"/>
+        </item>
+       </layout>
       </item>
       <item>
        <widget class="QPlainTextEdit" name="smile_chooser_2"/>
@@ -78,10 +92,38 @@
      </property>
      <layout class="QVBoxLayout" name="verticalLayout">
       <item>
-       <widget class="QComboBox" name="protein_chooser_1"/>
+       <layout class="QHBoxLayout" name="protein_state_layout_1">
+        <item>
+         <widget class="QComboBox" name="protein_chooser_1"/>
+        </item>
+        <item>
+         <widget class="QLabel" name="protein_state_label_1">
+          <property name="text">
+           <string>State:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QComboBox" name="protein_state_chooser_1"/>
+        </item>
+       </layout>
       </item>
       <item>
-       <widget class="QComboBox" name="ligand_chooser_1"/>
+       <layout class="QHBoxLayout" name="ligand_state_layout_1">
+        <item>
+         <widget class="QComboBox" name="ligand_chooser_1"/>
+        </item>
+        <item>
+         <widget class="QLabel" name="ligand_state_label_1">
+          <property name="text">
+           <string>State:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QComboBox" name="ligand_state_chooser_1"/>
+        </item>
+       </layout>
       </item>
       <item>
        <widget class="QComboBox" name="mode_chooser"/>

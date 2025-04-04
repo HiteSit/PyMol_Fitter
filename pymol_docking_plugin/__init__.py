@@ -275,6 +275,9 @@ class PymolDockingDialog(QtWidgets.QDialog):
         # Ensure state choosers have at least one option
         self.protein_state_chooser.addItem("1")
         self.ligand_state_chooser.addItem("1")
+        self.protein_state_chooser_1.addItem("1")
+        self.ligand_state_chooser_1.addItem("1")
+        self.protein_state_chooser_2.addItem("1")
         
         # Check if the Docker server is running
         if not docker_client.check_health():
@@ -310,6 +313,11 @@ class PymolDockingDialog(QtWidgets.QDialog):
         self.protein_chooser_MD.currentIndexChanged.connect(self.update_protein_states)
         self.ligand_chooser_MD.currentIndexChanged.connect(self.update_ligand_states)
         
+        # Connect state update signals for Docking tab
+        self.protein_chooser_1.currentIndexChanged.connect(self.update_protein_states_1)
+        self.ligand_chooser_1.currentIndexChanged.connect(self.update_ligand_states_1)
+        self.protein_chooser_2.currentIndexChanged.connect(self.update_protein_states_2)
+        
         # Note: buttonBox is assumed to be in GUI.ui and connected to accept/reject in the UI file
         
         # Initially set minimizer visibility based on the default mode selection
@@ -339,6 +347,11 @@ class PymolDockingDialog(QtWidgets.QDialog):
         self.protein_chooser_1.addItems(loaded_objects)
         self.protein_chooser_2.addItems(loaded_objects)
         self.ligand_chooser_1.addItems(loaded_objects)
+        
+        # Initialize state selectors
+        self.update_protein_states_1()
+        self.update_ligand_states_1()
+        self.update_protein_states_2()
 
     def populate_md_select_list(self):
         """Populate the MD tab protein and ligand selectors with available options."""
@@ -470,6 +483,10 @@ class PymolDockingDialog(QtWidgets.QDialog):
         in_site_visible = (modality == "In-Site")
         self.protein_chooser_1.setVisible(in_site_visible)
         self.ligand_chooser_1.setVisible(in_site_visible)
+        self.protein_state_chooser_1.setVisible(in_site_visible)
+        self.ligand_state_chooser_1.setVisible(in_site_visible)
+        self.protein_state_label_1.setVisible(in_site_visible)
+        self.ligand_state_label_1.setVisible(in_site_visible)
         self.mode_chooser.setVisible(in_site_visible)
         self.output_chooser.setVisible(in_site_visible)
         # Don't set minimizer visibility here - it's controlled by mode_chooser
@@ -481,6 +498,8 @@ class PymolDockingDialog(QtWidgets.QDialog):
         # For Off-Site mode
         off_site_visible = (modality == "Off-Site")
         self.protein_chooser_2.setVisible(off_site_visible)
+        self.protein_state_chooser_2.setVisible(off_site_visible)
+        self.protein_state_label_2.setVisible(off_site_visible)
         self.smile_chooser_2.setVisible(off_site_visible)
         self.output_chooser_2.setVisible(off_site_visible)
         self.verticalLayoutWidget_2.setVisible(off_site_visible)
@@ -505,22 +524,45 @@ class PymolDockingDialog(QtWidgets.QDialog):
     def in_site_wrapper(self):
         """Wrapper for in-site docking."""
         s1 = self.protein_chooser_1.currentText()
+        protein_state = int(self.protein_state_chooser_1.currentText())
         s2 = self.ligand_chooser_1.currentText()
+        ligand_state = int(self.ligand_state_chooser_1.currentText())
         mode = self.mode_chooser.currentText()
         outname = self.output_chooser.toPlainText()
         logger.info("Running on-site docking...")
         
+        # Create state-specific selections
+        protein_with_state = f"{s1} and state {protein_state}"
+        ligand_with_state = f"{s2} and state {ligand_state}"
+        
+        # Provide clear feedback
+        print(f"Running on-site {mode.lower()} with:")
+        print(f"  - Protein: {s1} (State: {protein_state})")
+        print(f"  - Ligand: {s2} (State: {ligand_state})")
+        print(f"  - Output name: {outname}")
+        
         minimization_flag = self.minimizer.isChecked()
         
-        on_site_docking(s1, s2, mode, outname, minimization_flag)
+        on_site_docking(protein_with_state, ligand_with_state, mode, outname, minimization_flag)
 
     def off_site_wrapper(self):
         """Wrapper for off-site docking."""
         s1 = self.protein_chooser_2.currentText()
+        protein_state = int(self.protein_state_chooser_2.currentText())
         s2 = self.smile_chooser_2.toPlainText()
         outname = self.output_chooser_2.toPlainText()
+        
+        # Create state-specific selection for protein
+        protein_with_state = f"{s1} and state {protein_state}"
+        
+        # Provide clear feedback
+        print(f"Running off-site docking with:")
+        print(f"  - Protein: {s1} (State: {protein_state})")
+        print(f"  - Ligand SMILES: {s2}")
+        print(f"  - Output name: {outname}")
+        
         logger.info("Running off-site docking...")
-        off_site_docking(s1, str(s2), outname)
+        off_site_docking(protein_with_state, str(s2), outname)
         
     def on_tab_changed(self, index):
         """Handle tab change events."""
@@ -529,6 +571,14 @@ class PymolDockingDialog(QtWidgets.QDialog):
             logger.info("Switched to docking tab")
             # You could refresh the UI here if needed
             self.populate_ligand_select_list()
+            
+            # Update state selectors
+            if self.protein_chooser_1.count() > 0:
+                self.update_protein_states_1()
+            if self.ligand_chooser_1.count() > 0:
+                self.update_ligand_states_1()
+            if self.protein_chooser_2.count() > 0:
+                self.update_protein_states_2()
         elif index == 1:
             # Second tab (MD minimization)
             logger.info("Switched to MD minimization tab")
@@ -623,6 +673,93 @@ class PymolDockingDialog(QtWidgets.QDialog):
         # Call the MD minimizer wrapper
         self.md_minimizer_wrapper()
         logger.info("MD minimization selected")
+
+    def update_protein_states_1(self):
+        """Update the protein state selector (in-site) with available states."""
+        # Clear existing state options
+        self.protein_state_chooser_1.clear()
+        
+        # Get current protein selection
+        protein_selection = self.protein_chooser_1.currentText()
+        if not protein_selection:
+            return
+        
+        try:
+            # Get the object name from the selection
+            obj_name = protein_selection.split()[0] if "&" in protein_selection else protein_selection
+            
+            # Count states for the selected object
+            state_count = cmd.count_states(obj_name)
+            
+            # Populate state selector with states (1-based indexing in PyMOL)
+            self.protein_state_chooser_1.addItems([str(i) for i in range(1, state_count + 1)])
+            
+            # Select first state by default
+            if state_count > 0:
+                self.protein_state_chooser_1.setCurrentIndex(0)
+                
+        except Exception as e:
+            logger.error(f"Error updating protein states (in-site): {e}")
+            # Default to a single state if error occurs
+            self.protein_state_chooser_1.addItem("1")
+    
+    def update_ligand_states_1(self):
+        """Update the ligand state selector (in-site) with available states."""
+        # Clear existing state options
+        self.ligand_state_chooser_1.clear()
+        
+        # Get current ligand selection
+        ligand_selection = self.ligand_chooser_1.currentText()
+        if not ligand_selection:
+            return
+        
+        try:
+            # Get the object name from the selection
+            obj_name = ligand_selection.split()[0] if "&" in ligand_selection else ligand_selection
+            
+            # Count states for the selected object
+            state_count = cmd.count_states(obj_name)
+            
+            # Populate state selector with states
+            self.ligand_state_chooser_1.addItems([str(i) for i in range(1, state_count + 1)])
+            
+            # Select first state by default
+            if state_count > 0:
+                self.ligand_state_chooser_1.setCurrentIndex(0)
+                
+        except Exception as e:
+            logger.error(f"Error updating ligand states (in-site): {e}")
+            # Default to a single state if error occurs
+            self.ligand_state_chooser_1.addItem("1")
+    
+    def update_protein_states_2(self):
+        """Update the protein state selector (off-site) with available states."""
+        # Clear existing state options
+        self.protein_state_chooser_2.clear()
+        
+        # Get current protein selection
+        protein_selection = self.protein_chooser_2.currentText()
+        if not protein_selection:
+            return
+        
+        try:
+            # Get the object name from the selection
+            obj_name = protein_selection.split()[0] if "&" in protein_selection else protein_selection
+            
+            # Count states for the selected object
+            state_count = cmd.count_states(obj_name)
+            
+            # Populate state selector with states (1-based indexing in PyMOL)
+            self.protein_state_chooser_2.addItems([str(i) for i in range(1, state_count + 1)])
+            
+            # Select first state by default
+            if state_count > 0:
+                self.protein_state_chooser_2.setCurrentIndex(0)
+                
+        except Exception as e:
+            logger.error(f"Error updating protein states (off-site): {e}")
+            # Default to a single state if error occurs
+            self.protein_state_chooser_2.addItem("1")
 
 # Plugin initialization for PyMOL
 def __init_plugin__(app=None):
