@@ -103,7 +103,7 @@ The project is organized into three main components:
     ```
    
    <p align="center">
-   <img src="img1.png" width="800">
+   <img src="./docs/img1.png" width="800">
    </p>
 
 ## 🚀 Usage Guide
