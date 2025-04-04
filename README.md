@@ -4,7 +4,8 @@ A powerful PyMOL plugin for molecular docking and minimization that leverages Do
 
 ## 📋 Features
 
-- **Cross-platform compatibility** through Docker containerization
+- **Cross-platform compatibility** through Docker cont
+- ainerization
 - **Multiple docking modes**:
     - In-Site: Use 3D ligand structures already loaded in PyMOL
     - Off-Site: Generate 3D conformers from SMILES strings
@@ -296,7 +297,7 @@ Additionally, please cite the underlying tools:
 This project utilizes several open-source tools and libraries:
 
 - [PyMOL](https://pymol.org/)
-- [smina](https://sourceforge.net/projects/smina/)
+- [Smina](https://sourceforge.net/projects/smina/)
 - [OpenMM](http://openmm.org/)
 - [RDKit](https://www.rdkit.org/)
 - [PoseBusters](https://github.com/OpenFreeEnergy/poseBusters)
