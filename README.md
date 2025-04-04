@@ -53,7 +53,7 @@ The project is organized into three main components:
 1. Simply pull the container
     
     ```bash
-    docker pull hitesit/pymol-fitter-minimizer
+    docker pull hitesit/pymol-fitter
     ```
     
 
@@ -62,8 +62,8 @@ The project is organized into three main components:
 1. Clone this repository:
     
     ```bash
-    git clone https://github.com/yourusername/pymol-fitter.git
-    cd pymol-fitter
+    git clone https://github.com/HiteSit/PyMol_Fitter.git
+    cd PyMol_Fitter
     ```
     
 2. Build and start the Docker container:
@@ -77,6 +77,8 @@ The project is organized into three main components:
 ### 2. Install the PyMOL Plugin
 
 1. Install the required Python packages for the client:
+   
+    > A helpful tip to simplify the installation of these lightweight dependencies is to download PyMOL3 and install the dependencies using the PyMOL2 prompt. Where can you find it? If you have PyMOL3, you can simply search for it in the Start Menu.
     
     ```bash
     pip install requests pathlib
