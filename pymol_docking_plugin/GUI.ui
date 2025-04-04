@@ -140,10 +140,38 @@
      </property>
      <layout class="QVBoxLayout" name="verticalLayout_3">
       <item>
-       <widget class="QComboBox" name="protein_chooser_MD"/>
+       <layout class="QHBoxLayout" name="protein_state_layout">
+        <item>
+         <widget class="QComboBox" name="protein_chooser_MD"/>
+        </item>
+        <item>
+         <widget class="QLabel" name="protein_state_label">
+          <property name="text">
+           <string>State:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QComboBox" name="protein_state_chooser"/>
+        </item>
+       </layout>
       </item>
       <item>
-       <widget class="QComboBox" name="ligand_chooser_MD"/>
+       <layout class="QHBoxLayout" name="ligand_state_layout">
+        <item>
+         <widget class="QComboBox" name="ligand_chooser_MD"/>
+        </item>
+        <item>
+         <widget class="QLabel" name="ligand_state_label">
+          <property name="text">
+           <string>State:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QComboBox" name="ligand_state_chooser"/>
+        </item>
+       </layout>
       </item>
      </layout>
     </widget>

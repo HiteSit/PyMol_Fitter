@@ -90,7 +90,7 @@ def off_site_docking(protein_selection: str, ligand_smiles: str, outname: str) -
         
         # Load the results into PyMOL
         cmd.load(str(results["docked_ligand"]), outname)
-        cmd.load(str(results["prepared_protein"]), f"{outname}_protein")
+        # cmd.load(str(results["prepared_protein"]), f"{outname}_protein")
         print(f"Docking completed successfully! Results loaded as {outname} and {outname}_protein")
         
     except FileNotFoundError as e:
@@ -169,7 +169,7 @@ def on_site_docking(protein_selection: str, ligand_selection: str, mode: str,
         
         # Load the results into PyMOL
         cmd.load(str(results["docked_ligand"]), outname)
-        cmd.load(str(results["prepared_protein"]), f"{outname}_protein")
+        # cmd.load(str(results["prepared_protein"]), f"{outname}_protein")
         
         # If minimization was performed, load the minimized complex
         if minimization_flag and "minimized_complex" in results:
@@ -272,6 +272,10 @@ class PymolDockingDialog(QtWidgets.QDialog):
         self.output_name_label = QtWidgets.QLabel("Output Name:", self.tab_2)
         self.output_name_label.setGeometry(70, 180, 80, 25)
         
+        # Ensure state choosers have at least one option
+        self.protein_state_chooser.addItem("1")
+        self.ligand_state_chooser.addItem("1")
+        
         # Check if the Docker server is running
         if not docker_client.check_health():
             self.setWindowTitle("PyMOL Docking - Docker Server Not Running")
@@ -301,6 +305,11 @@ class PymolDockingDialog(QtWidgets.QDialog):
         self.tabWidget.currentChanged.connect(self.on_tab_changed)
         # Connect buttonBox_MD for the second tab
         self.buttonBox_MD.accepted.connect(self.on_md_dialog_accepted)
+        
+        # Connect state update signals for MD tab
+        self.protein_chooser_MD.currentIndexChanged.connect(self.update_protein_states)
+        self.ligand_chooser_MD.currentIndexChanged.connect(self.update_ligand_states)
+        
         # Note: buttonBox is assumed to be in GUI.ui and connected to accept/reject in the UI file
         
         # Initially set minimizer visibility based on the default mode selection
@@ -338,8 +347,78 @@ class PymolDockingDialog(QtWidgets.QDialog):
         self.ligand_chooser_MD.clear()
         self.protein_chooser_MD.addItems(loaded_objects)
         self.ligand_chooser_MD.addItems(loaded_objects)
+        
         # Set the ligand_chooser visibility based on protein_only_flag
         self.ligand_chooser_MD.setVisible(not self.protein_only_flag.isChecked())
+        self.ligand_state_label.setVisible(not self.protein_only_flag.isChecked())
+        self.ligand_state_chooser.setVisible(not self.protein_only_flag.isChecked())
+        
+        # Initialize state selectors
+        self.update_protein_states()
+        self.update_ligand_states()
+    
+    def update_protein_states(self):
+        """Update the protein state selector with available states."""
+        # Clear existing state options
+        self.protein_state_chooser.clear()
+        
+        # Get current protein selection
+        protein_selection = self.protein_chooser_MD.currentText()
+        if not protein_selection:
+            return
+        
+        try:
+            # Get the object name from the selection
+            # If selection includes chain specifier (e.g., "protein & chain A"), extract the object name
+            obj_name = protein_selection.split()[0] if "&" in protein_selection else protein_selection
+            
+            # Count states for the selected object
+            state_count = cmd.count_states(obj_name)
+            
+            # Populate state selector with states (1-based indexing in PyMOL)
+            self.protein_state_chooser.addItems([str(i) for i in range(1, state_count + 1)])
+            
+            # Select first state by default
+            if state_count > 0:
+                self.protein_state_chooser.setCurrentIndex(0)
+                
+        except Exception as e:
+            logger.error(f"Error updating protein states: {e}")
+            # Default to a single state if error occurs
+            self.protein_state_chooser.addItem("1")
+    
+    def update_ligand_states(self):
+        """Update the ligand state selector with available states."""
+        # Clear existing state options
+        self.ligand_state_chooser.clear()
+        
+        # Only update if ligand selection is visible
+        if not self.ligand_chooser_MD.isVisible():
+            return
+            
+        # Get current ligand selection
+        ligand_selection = self.ligand_chooser_MD.currentText()
+        if not ligand_selection:
+            return
+        
+        try:
+            # Get the object name from the selection
+            obj_name = ligand_selection.split()[0] if "&" in ligand_selection else ligand_selection
+            
+            # Count states for the selected object
+            state_count = cmd.count_states(obj_name)
+            
+            # Populate state selector with states
+            self.ligand_state_chooser.addItems([str(i) for i in range(1, state_count + 1)])
+            
+            # Select first state by default
+            if state_count > 0:
+                self.ligand_state_chooser.setCurrentIndex(0)
+                
+        except Exception as e:
+            logger.error(f"Error updating ligand states: {e}")
+            # Default to a single state if error occurs
+            self.ligand_state_chooser.addItem("1")
 
     def choose_docking_modes(self):
         """Populate the docking mode chooser."""
@@ -455,6 +534,12 @@ class PymolDockingDialog(QtWidgets.QDialog):
             logger.info("Switched to MD minimization tab")
             # Initialize MD tab functionality
             self.populate_md_select_list()
+            
+            # Make sure state selectors are properly initialized
+            if self.protein_chooser_MD.count() > 0:
+                self.update_protein_states()
+            if self.ligand_chooser_MD.count() > 0 and not self.protein_only_flag.isChecked():
+                self.update_ligand_states()
         elif index == 2:
             # Third tab (new functionality)
             logger.info("Switched to second tab")
@@ -473,6 +558,7 @@ class PymolDockingDialog(QtWidgets.QDialog):
     def md_minimizer_wrapper(self):
         """Wrapper for MD minimization."""
         protein = self.protein_chooser_MD.currentText()
+        protein_state = int(self.protein_state_chooser.currentText())
         
         # Validate output name (allow only alphanumeric characters, underscore, and hyphen)
         outname = self.output_name_MD.text() if self.output_name_MD.text() else "minimized_complex"
@@ -483,28 +569,43 @@ class PymolDockingDialog(QtWidgets.QDialog):
         
         # Only use ligand if protein_only_flag is not checked
         ligand = None
+        ligand_state = None
         if not self.protein_only_flag.isChecked():
             ligand = self.ligand_chooser_MD.currentText()
+            ligand_state = int(self.ligand_state_chooser.currentText())
         
         # Provide clear feedback on what's being run
         if ligand:
             print(f"Running MD minimization on protein-ligand complex...")
-            print(f"  - Protein: {protein}")
-            print(f"  - Ligand: {ligand}")
+            print(f"  - Protein: {protein} (State: {protein_state})")
+            print(f"  - Ligand: {ligand} (State: {ligand_state})")
             print(f"  - Output name: {outname}")
             logger.info(f"Running protein-ligand minimization with output name: {outname}")
-            md_minimization(protein, ligand, outname)
+            
+            # Create temporary selections with specific states
+            protein_with_state = f"{protein} and state {protein_state}"
+            ligand_with_state = f"{ligand} and state {ligand_state}"
+            
+            # Call md_minimization with state-specific selections
+            md_minimization(protein_with_state, ligand_with_state, outname)
         else:
             print(f"Running MD minimization on protein only...")
-            print(f"  - Protein: {protein}")
+            print(f"  - Protein: {protein} (State: {protein_state})")
             print(f"  - Output name: {outname}")
             logger.info(f"Running protein-only minimization with output name: {outname}")
-            md_minimization(protein, None, outname)
+            
+            # Create temporary selection with specific state
+            protein_with_state = f"{protein} and state {protein_state}"
+            
+            # Call md_minimization with state-specific selection
+            md_minimization(protein_with_state, None, outname)
     
     def on_protein_only_toggled(self, checked):
         """Handle the protein-only checkbox state change."""
         # Show/hide ligand selector based on checkbox state
         self.ligand_chooser_MD.setVisible(not checked)
+        self.ligand_state_label.setVisible(not checked)
+        self.ligand_state_chooser.setVisible(not checked)
         if checked:
             logger.info(f"Protein-only minimization mode activated")
             print("Protein-only minimization mode activated")
