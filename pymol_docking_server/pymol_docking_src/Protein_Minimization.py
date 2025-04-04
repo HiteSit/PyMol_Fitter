@@ -40,7 +40,7 @@ from openmmforcefields.generators import SystemGenerator
 UnitQuantity = Quantity
 
 
-def minimize_complex(prot_path: Union[str, Path], lig_mol: Chem.rdchem.Mol) -> Dict[str, Union[str, float]]:
+def minimize_complex(prot_path: Union[str, Path], lig_mol: Optional[Chem.rdchem.Mol] = None) -> Dict[str, Union[str, float]]:
     """
     Prepare and minimize a protein-ligand complex using OpenMM.
     
@@ -70,8 +70,7 @@ def minimize_complex(prot_path: Union[str, Path], lig_mol: Chem.rdchem.Mol) -> D
     if not os.path.exists(str(prot_path)):
         raise FileNotFoundError(f"Protein file not found: {prot_path}")
     
-    # Validate ligand molecule
-    if lig_mol is None or lig_mol.GetNumAtoms() == 0:
+    if lig_mol is not None and lig_mol.GetNumAtoms() == 0:
         raise ValueError("Invalid ligand molecule: molecule is None or empty")
     
     try:
@@ -86,35 +85,58 @@ def minimize_complex(prot_path: Union[str, Path], lig_mol: Chem.rdchem.Mol) -> D
         fixer.addMissingAtoms()
         fixer.addMissingHydrogens(7.4)
         
-        # Parse the ligand
-        ligand_mol: Molecule = Molecule.from_rdkit(lig_mol)
-        lig_top = ligand_mol.to_topology()
-        
-        # Merge the ligand into the protein
-        modeller: Modeller = Modeller(fixer.topology, fixer.positions)
-        modeller.add(lig_top.to_openmm(), lig_top.get_positions().to_openmm())
-        
-        # Create the forcefield
-        forcefield_kwargs: Dict[str, Any] = { 
-            'constraints': app.HBonds, 
-            'hydrogenMass': 4*unit.amu 
-        }
-        
-        # Set up the system generator with appropriate forcefields
-        system_generator: SystemGenerator = SystemGenerator(
-            forcefields=['amber/ff14SB.xml', 'amber/tip3p_standard.xml'],
-            small_molecule_forcefield='gaff-2.11',
-            molecules=[ligand_mol],
-            forcefield_kwargs=forcefield_kwargs
-        )
-        
-        # Create the system for simulation
-        system: System = system_generator.create_system(modeller.topology)
-        integrator: LangevinIntegrator = LangevinIntegrator(
-            300 * unit.kelvin,
-            1 / unit.picosecond,
-            0.002 * unit.picoseconds,
-        )
+        if lig_mol is not None:
+            # Parse the ligand
+            ligand_mol: Molecule = Molecule.from_rdkit(lig_mol)
+            lig_top = ligand_mol.to_topology()
+            
+            # Merge the ligand into the protein
+            modeller: Modeller = Modeller(fixer.topology, fixer.positions)
+            modeller.add(lig_top.to_openmm(), lig_top.get_positions().to_openmm())
+            
+            # Create the forcefield
+            forcefield_kwargs: Dict[str, Any] = { 
+                'constraints': app.HBonds, 
+                'hydrogenMass': 4*unit.amu 
+            }
+            
+            # Set up the system generator with appropriate forcefields
+            system_generator: SystemGenerator = SystemGenerator(
+                forcefields=['amber/ff14SB.xml', 'amber/tip3p_standard.xml'],
+                small_molecule_forcefield='gaff-2.11',
+                molecules=[ligand_mol],
+                forcefield_kwargs=forcefield_kwargs
+            )
+            
+            # Create the system for simulation
+            system: System = system_generator.create_system(modeller.topology)
+            integrator: LangevinIntegrator = LangevinIntegrator(
+                300 * unit.kelvin,
+                1 / unit.picosecond,
+                0.002 * unit.picoseconds,
+            )
+        else:
+            modeller: Modeller = Modeller(fixer.topology, fixer.positions)
+            
+            # Create the forcefield
+            forcefield_kwargs: Dict[str, Any] = { 
+                'constraints': app.HBonds, 
+                'hydrogenMass': 4*unit.amu 
+            }
+            
+            # Set up the system generator with appropriate forcefields
+            system_generator: SystemGenerator = SystemGenerator(
+                forcefields=['amber/ff14SB.xml', 'amber/tip3p_standard.xml'],
+                forcefield_kwargs=forcefield_kwargs
+            )
+            
+            # Create the system for simulation
+            system: System = system_generator.create_system(modeller.topology)
+            integrator: LangevinIntegrator = LangevinIntegrator(
+                300 * unit.kelvin,
+                1 / unit.picosecond,
+                0.002 * unit.picoseconds,
+            )
         
         # Try to use CUDA, fall back to CPU if not available
         try:
