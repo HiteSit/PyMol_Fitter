@@ -52,7 +52,16 @@ The project is organized into three main components:
 
 ## 📥 Installation
 
-### 1. Set Up the Docker Container
+### 1a. Pull docker container
+
+1. Simply pull the container
+    
+    ```bash
+    docker pull hitesit/pymol-docking-minimizer:1.0.0
+    ```
+    
+
+### 1b. Set Up the Docker Container
 
 1. Install Docker Desktop for your operating system:
     - [Docker Desktop for Windows](https://docs.docker.com/desktop/install/windows-install/)
@@ -87,7 +96,15 @@ The project is organized into three main components:
     pip install requests pathlib
     ```
     
-2. Install the plugin from the Pymol-Plugin GUI
+2. Install the plugin from the Pymol-Plugin GUI using the URL:
+      
+   ```bash
+    https://github.com/HiteSit/Pymol_Docking/blob/master/pymol_docking_plugin.zip
+    ```
+   
+   <p align="center">
+   <img src="img1.png" width="800">
+   </p>
 
 ## 🚀 Usage Guide
 
