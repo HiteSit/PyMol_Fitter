@@ -3,7 +3,7 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    image: hitesit/pymol-fitter
+    image: hitesit/pymol-fitter:latest
     container_name: pymol-fitter
     ports:
       - "5000:5000"
@@ -13,6 +13,32 @@ services:
     environment:
       - FLASK_APP=app.py
       - FLASK_ENV=production
+    profiles:
+      - cpu
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  # GPU-enabled version as a separate service
+  pymol-fitter-gpu:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: hitesit/pymol-fitter:gpu
+    container_name: pymol-fitter-gpu
+    ports:
+      - "5001:5000"
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+    environment:
+      - FLASK_APP=app.py
+      - FLASK_ENV=production
+    profiles:
+      - gpu
     deploy:
       resources:
         reservations:

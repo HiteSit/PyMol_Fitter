@@ -53,9 +53,14 @@ The project is organized into three main components:
 1. Simply pull the container
     
     ```bash
-    docker pull hitesit/pymol-fitter
+    docker pull hitesit/pymol-fitter:latest
     ```
     
+    For GPU-accelerated version:
+    
+    ```bash
+    docker pull hitesit/pymol-fitter:gpu
+    ```
 
 ### 1b. Set Up the Docker Container
 
@@ -70,9 +75,22 @@ The project is organized into three main components:
     
     ```bash
     cd docker
-    docker-compose up -d
+    docker-compose --profile cpu up -d  # Uses the CPU version (hitesit/pymol-fitter:latest)
     ```
     
+    If you have an NVIDIA GPU and want to use it for acceleration:
+    
+    ```bash
+    cd docker
+    docker-compose --profile gpu up -d  # Uses the GPU version (hitesit/pymol-fitter:gpu)
+    ```
+    
+    You can also run both services simultaneously:
+    
+    ```bash
+    cd docker
+    docker-compose --profile cpu --profile gpu up -d  # Runs both CPU and GPU versions
+    ```
 
 ### 2. Install the PyMOL Plugin
 
@@ -192,28 +210,52 @@ The server exposes the following RESTful API endpoints:
 1. **Docker Container Not Running**:
     
     ```bash
-    docker ps | grep pymol-fitter-minimizer
+    # Check for CPU version
+    docker ps | grep pymol-fitter
+    
+    # Check for GPU version
+    docker ps | grep pymol-fitter-gpu
     ```
     
     If no results, try restarting the container:
     
     ```bash
+    # For CPU version (hitesit/pymol-fitter:latest)
     cd docker
     docker-compose down
-    docker-compose up -d
+    docker-compose --profile cpu up -d
     ```
     
+    For GPU version:
+    ```bash
+    # For GPU version (hitesit/pymol-fitter:gpu)
+    cd docker
+    docker-compose down
+    docker-compose --profile gpu up -d
+    ```
+
 2. **API Connection Errors**:
 Test the API directly:
     
     ```bash
+    # For CPU version (port 5000)
     curl http://localhost:5000/health
+    
+    # For GPU version (port 5001)
+    curl http://localhost:5001/health
     ```
     
     If not responding, check Docker logs:
     
     ```bash
-    docker logs pymol-fitter-minimizer
+    # For CPU version
+    docker logs pymol-fitter
+    ```
+    
+    For GPU version:
+    ```bash
+    # For GPU version
+    docker logs pymol-fitter-gpu
     ```
     
 3. **Plugin Not Appearing in PyMOL**:
