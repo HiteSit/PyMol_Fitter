@@ -109,7 +109,7 @@ Here's how to create this file:
 ```python
 cd /path/to/working_directory
 
-# Click on the Crystal ligand
+# Click on the Crystal Ligand
 save Crystal.sdf, sele
 ```
 
@@ -122,7 +122,7 @@ Use this mode when you already have both protein and ligand structures loaded in
 3. Choose your ligand from the "Ligand" dropdown
 4. Select the operation mode:
     - **Dock**: For full docking (finding binding poses)
-    - **Minimize**: For optimizing an existing binding pose
+    - **Minimize**: For optimizing an existing binding pose.
 5. Enter an output name for the results
 6. Click "OK" to start the docking process
 
@@ -220,17 +220,22 @@ Test the API directly:
     - Ensure the plugin files are in the correct directory
     - Restart PyMOL
     - Check PyMOL's plugin manager
-4. **Docking/Minimization Failures**:
-    - Check console output for specific errors
-    - Ensure input structures are valid
-    - For SMILES inputs, verify the SMILES string is correct
-    - For minimization, check for clashes in the input structure
+
+4. **In-Site Docking Failures**:
+    - Always check the Docker console; the error handling should be descriptive enough.
+    - Check for the kekulization of the ligand and consider starting from a PDBx file instead of a PDB file. If it still fails, use the Off-Site option with the kekulized SMILES of the Crystal ligand of interest.
+  
+5. **Minimization Failures**:
+    - Check the Docker console. You should see something like the example below. This process can take several minutes depending on the complexity of the ligand.
+        ```shell
+        Generating a residue template for [H][C]1=[N][N]([H])[C]([H])=[C]1[c]1[c]([H])[c]([H])[c]([H])[c]([C@]([H])([N]([H])[c]2[n][c]([C]([H])([H])[H])[n][c]3[c]([H])[c]([O][C]([H])([H])[H])[c]([O][C]([H])([H])[H])[c]([H])[c]23)[C]([H])([H])[H])[c]1[H] using gaff-2.11
+        ```
 
 ## 📚 Scientific Methods
 
 ### Docking Algorithm
 
-This plugin uses smina, a fork of AutoDock Vina with enhanced scoring function options and improved minimization algorithms. The docking process:
+This plugin uses Smina.
 
 ### Energy Minimization
 
@@ -243,12 +248,7 @@ The minimization process is highly customizable and encapsulated into a single f
 
 ### Pose Evaluation
 
-PoseBusters is used to evaluate docking poses by checking:
-
-- Atom clashes
-- Bond lengths and angles
-- Hydrogen bonding networks
-- Comparison to reference crystal structures (if available)
+PoseBusters is used to evaluate docking poses.
 
 ## 📋 Citation
 
@@ -258,7 +258,7 @@ If you use this plugin in your research, please cite:
 @software{pymol_fitter_plugin,
   author = {Riccardo Fusco},
   title = {PyMOL Fitter Plugin},
-  year = {2023},
+  year = {2025},
   url = {https://github.com/hitesit/pymol-fitter}
 }
 ```
