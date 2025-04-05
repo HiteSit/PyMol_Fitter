@@ -86,6 +86,7 @@ The project is organized into three main components:
     ```
     
     You can also run both services simultaneously:
+    > Useful if you have a portable PC with the option to "shut-down" the GPU for battery saving and you are working on a train.
     
     ```bash
     cd docker
