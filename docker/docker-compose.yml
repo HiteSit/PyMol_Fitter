@@ -30,7 +30,7 @@ services:
     image: hitesit/pymol-fitter:gpu
     container_name: pymol-fitter-gpu
     ports:
-      - "5001:5000"
+      - "5000:5000"
     volumes:
       - ./data:/app/data
     restart: unless-stopped
