@@ -20,13 +20,32 @@ from pymol_fitter_server.pymol_fitter_src.Protein_Minimization import (
 class TestProteinMinimization:
     """Test suite for the protein minimization module."""
     
-    @pytest.fixture(scope="class")
-    def example_files(self, example_dir):
-        """Return paths to sample files from the examples directory."""
-        return {
-            "protein": example_dir / "LAC3.pdb",
-            "ligand": example_dir / "Lig_Min.sdf"
+    @pytest.fixture(
+        scope="class",
+        params=[
+            {"protein": "LAC3.pdb", "ligand": "Lig_Min.sdf"},
+            # {"protein": "8gcy.pdb", "ligand": "8gcy_Crystal.sdf"},
+            # {"protein": "GLP-R.pdb", "ligand": "Complex_Ligand.sdf"}
+        ],
+        ids=["glpr"]
+    )
+    def example_files(self, request, example_dir):
+        """Return paths to sample files from the examples directory.
+        
+        This fixture is parameterized to run tests with multiple sets of example files.
+        """
+        file_paths = {
+            "protein": example_dir / request.param["protein"],
+            "ligand": example_dir / request.param["ligand"]
         }
+        
+        # Skip if files don't exist
+        if not file_paths["protein"].exists():
+            pytest.skip(f"Protein file not found: {file_paths['protein']}")
+        if not file_paths["ligand"].exists():
+            pytest.skip(f"Ligand file not found: {file_paths['ligand']}")
+            
+        return file_paths
     
     @pytest.fixture(scope="function")
     def ligand_mol(self, example_files):

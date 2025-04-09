@@ -61,4 +61,4 @@ EXPOSE 5000
 
 # The default entrypoint in the micromamba image automatically 
 # activates the base environment
-CMD ["gunicorn", "--timeout", "600", "--bind", "0.0.0.0:5000", "app:app"]
+CMD ["sh", "-c", "gunicorn --timeout ${GUNICORN_TIMEOUT:-600} --bind 0.0.0.0:5000 app:app"]

@@ -13,6 +13,7 @@ services:
     environment:
       - FLASK_APP=app.py
       - FLASK_ENV=production
+      - GUNICORN_TIMEOUT=1200  # 20 minutes
     profiles:
       - cpu
     healthcheck:
@@ -37,6 +38,7 @@ services:
     environment:
       - FLASK_APP=app.py
       - FLASK_ENV=production
+      - GUNICORN_TIMEOUT=1200  # 20 minutes
     profiles:
       - gpu
     deploy:

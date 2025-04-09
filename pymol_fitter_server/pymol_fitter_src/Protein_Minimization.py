@@ -102,8 +102,8 @@ def minimize_complex(prot_path: Union[str, Path], lig_mol: Optional[Chem.rdchem.
             
             # Set up the system generator with appropriate forcefields
             system_generator: SystemGenerator = SystemGenerator(
-                forcefields=['amber/ff14SB.xml', 'amber/tip3p_standard.xml'],
-                small_molecule_forcefield='gaff-2.11',
+                forcefields=['amber/ff14SB.xml'],
+                small_molecule_forcefield='openff-2.1.1',
                 molecules=[ligand_mol],
                 forcefield_kwargs=forcefield_kwargs
             )
@@ -121,12 +121,12 @@ def minimize_complex(prot_path: Union[str, Path], lig_mol: Optional[Chem.rdchem.
             # Create the forcefield
             forcefield_kwargs: Dict[str, Any] = { 
                 'constraints': app.HBonds, 
-                'hydrogenMass': 4*unit.amu 
+                'hydrogenMass': 4*unit.amu,
             }
             
             # Set up the system generator with appropriate forcefields
             system_generator: SystemGenerator = SystemGenerator(
-                forcefields=['amber/ff14SB.xml', 'amber/tip3p_standard.xml'],
+                forcefields=['amber/ff14SB.xml'],
                 forcefield_kwargs=forcefield_kwargs
             )
             
