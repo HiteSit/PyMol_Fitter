@@ -2,7 +2,7 @@ services:
   pymol-fitter:
     build:
       context: ..
-      dockerfile: docker/Dockerfile
+      dockerfile: docker/Dockerfile.cpu
     image: hitesit/pymol-fitter:latest
     container_name: pymol-fitter
     ports:
@@ -27,7 +27,7 @@ services:
   pymol-fitter-gpu:
     build:
       context: ..
-      dockerfile: docker/Dockerfile
+      dockerfile: docker/Dockerfile.gpu
     image: hitesit/pymol-fitter:gpu
     container_name: pymol-fitter-gpu
     ports:
