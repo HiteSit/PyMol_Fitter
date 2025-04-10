@@ -28,7 +28,7 @@ class TestProteinMinimization:
             {"protein": "GLP-R.pdb", "ligand": "GLP-R_Simple.sdf"},
             {"protein": "GLP-R.pdb", "ligand": "Complex_Ligand.sdf"}
         ],
-        ids=["lac3", "8gcy", "glpr", "glpr_complex"]
+        ids=["lac3", "8gcy", "glpr_simple", "glpr_complex"]
     )
     def example_files(self, request, example_dir):
         """Return paths to sample files from the examples directory.
