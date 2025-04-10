@@ -23,6 +23,7 @@ from openmm.app import (
 )
 
 # OpenMM Library Layer
+import openmm
 from openmm import (
     Platform, LangevinIntegrator, MonteCarloBarostat,
     CustomExternalForce, State, System, Context
@@ -34,13 +35,17 @@ from openmm.unit import Quantity
 
 # OPENFF
 from openff.toolkit import Molecule
-from openmmforcefields.generators import SystemGenerator
+from openmmforcefields.generators import SystemGenerator, SMIRNOFFTemplateGenerator
 
 # Type for OpenMM unit quantities
 UnitQuantity = Quantity
 
 
-def minimize_complex(prot_path: Union[str, Path], lig_mol: Optional[Chem.rdchem.Mol] = None) -> Dict[str, Union[str, float]]:
+def minimize_complex(
+    prot_path: Union[str, Path], 
+    lig_mol: Optional[Chem.rdchem.Mol] = None,
+    use_implicit_solvent: bool = True
+) -> Dict[str, Union[str, float]]:
     """
     Prepare and minimize a protein-ligand complex using OpenMM.
     
@@ -54,6 +59,7 @@ def minimize_complex(prot_path: Union[str, Path], lig_mol: Optional[Chem.rdchem.
     Parameters:
         prot_path: Path to the protein PDB file
         lig_mol: RDKit molecule object representing the ligand
+        use_implicit_solvent: If True, use implicit solvent (GBSA) for minimization
         
     Returns:
         Dictionary containing:
@@ -85,58 +91,110 @@ def minimize_complex(prot_path: Union[str, Path], lig_mol: Optional[Chem.rdchem.
         fixer.addMissingAtoms()
         fixer.addMissingHydrogens(7.4)
         
-        if lig_mol is not None:
-            # Parse the ligand
-            ligand_mol: Molecule = Molecule.from_rdkit(lig_mol)
-            lig_top = ligand_mol.to_topology()
+        # Create the basic forcefield kwargs
+        forcefield_kwargs: Dict[str, Any] = { 
+            'constraints': app.HBonds, 
+            'hydrogenMass': 4*unit.amu 
+        }
+        
+        # Determine whether to use implicit solvent and set up appropriate parameters
+        if use_implicit_solvent:
+            # Need to include the implicit solvent force field XML along with the protein force field
+            forcefields = ['amber/ff14SB.xml', 'amber/tip3p_standard.xml', 'implicit/obc2.xml']
             
-            # Merge the ligand into the protein
-            modeller: Modeller = Modeller(fixer.topology, fixer.positions)
-            modeller.add(lig_top.to_openmm(), lig_top.get_positions().to_openmm())
+            # Direct forcefield approach instead of passing through SystemGenerator for implicit solvent
+            forcefield = app.ForceField(*forcefields)
             
-            # Create the forcefield
-            forcefield_kwargs: Dict[str, Any] = { 
-                'constraints': app.HBonds, 
-                'hydrogenMass': 4*unit.amu 
-            }
+            # Create modeller based on whether we have a ligand
+            if lig_mol is not None:
+                # Parse the ligand
+                ligand_mol: Molecule = Molecule.from_rdkit(lig_mol)
+                lig_top = ligand_mol.to_topology()
+                
+                # Merge the ligand into the protein
+                modeller: Modeller = Modeller(fixer.topology, fixer.positions)
+                modeller.add(lig_top.to_openmm(), lig_top.get_positions().to_openmm())
+                
+                # Need to parameterize the ligand separately
+                template_generator = SMIRNOFFTemplateGenerator(
+                    molecules=[ligand_mol], forcefield='openff-2.1.1'
+                )
+                forcefield.registerTemplateGenerator(template_generator.generator)
+            else:
+                modeller: Modeller = Modeller(fixer.topology, fixer.positions)
             
-            # Set up the system generator with appropriate forcefields
-            system_generator: SystemGenerator = SystemGenerator(
-                forcefields=['amber/ff14SB.xml'],
-                small_molecule_forcefield='openff-2.1.1',
-                molecules=[ligand_mol],
-                forcefield_kwargs=forcefield_kwargs
+            # Ensure no periodic boundary conditions are set
+            modeller.topology.setPeriodicBoxVectors(None)
+            
+            # Create the system directly with OBC implicit solvent
+            system = forcefield.createSystem(
+                modeller.topology,
+                nonbondedMethod=app.CutoffNonPeriodic, 
+                nonbondedCutoff=1.0*unit.nanometer,
+                constraints=app.HBonds,
+                hydrogenMass=4*unit.amu
             )
+            # Add the implicit solvent force directly
+            # The implicitSolvent parameter is now specified in the force field xml file
             
-            # Create the system for simulation
-            system: System = system_generator.create_system(modeller.topology)
-            integrator: LangevinIntegrator = LangevinIntegrator(
-                300 * unit.kelvin,
-                1 / unit.picosecond,
-                0.002 * unit.picoseconds,
-            )
         else:
-            modeller: Modeller = Modeller(fixer.topology, fixer.positions)
-            
-            # Create the forcefield
-            forcefield_kwargs: Dict[str, Any] = { 
-                'constraints': app.HBonds, 
-                'hydrogenMass': 4*unit.amu,
+            # Non-implicit solvent approach using SystemGenerator
+            nonperiodic_forcefield_kwargs: Dict[str, Any] = {
+                'nonbondedMethod': app.NoCutoff,
             }
             
-            # Set up the system generator with appropriate forcefields
-            system_generator: SystemGenerator = SystemGenerator(
-                forcefields=['amber/ff14SB.xml'],
-                forcefield_kwargs=forcefield_kwargs
-            )
+            forcefields = ['amber/ff14SB.xml']
+                
+            if lig_mol is not None:
+                # Parse the ligand
+                ligand_mol: Molecule = Molecule.from_rdkit(lig_mol)
+                lig_top = ligand_mol.to_topology()
+                
+                # Merge the ligand into the protein
+                modeller: Modeller = Modeller(fixer.topology, fixer.positions)
+                modeller.add(lig_top.to_openmm(), lig_top.get_positions().to_openmm())
+                
+                # Set up the system generator with the small molecule forcefield
+                system_generator: SystemGenerator = SystemGenerator(
+                    forcefields=forcefields,
+                    small_molecule_forcefield='openff-2.1.1',
+                    molecules=[ligand_mol],
+                    forcefield_kwargs=forcefield_kwargs,
+                    nonperiodic_forcefield_kwargs=nonperiodic_forcefield_kwargs
+                )
+            else:
+                modeller: Modeller = Modeller(fixer.topology, fixer.positions)
+                
+                # Set up the system generator WITHOUT small molecule forcefield
+                system_generator: SystemGenerator = SystemGenerator(
+                    forcefields=forcefields,
+                    forcefield_kwargs=forcefield_kwargs,
+                    nonperiodic_forcefield_kwargs=nonperiodic_forcefield_kwargs
+                )
+            
+            # Ensure no periodic boundary conditions are set
+            modeller.topology.setPeriodicBoxVectors(None)
             
             # Create the system for simulation
             system: System = system_generator.create_system(modeller.topology)
-            integrator: LangevinIntegrator = LangevinIntegrator(
-                300 * unit.kelvin,
-                1 / unit.picosecond,
-                0.002 * unit.picoseconds,
-            )
+        
+        # Check for and remove any unwanted periodic box vectors
+        # This ensures we're truly in non-periodic mode
+        for force in system.getForces():
+            if isinstance(force, openmm.NonbondedForce):
+                if force.getNonbondedMethod() in [
+                    openmm.NonbondedForce.PME,
+                    openmm.NonbondedForce.Ewald,
+                    openmm.NonbondedForce.CutoffPeriodic
+                ]:
+                    force.setNonbondedMethod(openmm.NonbondedForce.NoCutoff)
+        
+        # Set up the integrator
+        integrator: LangevinIntegrator = LangevinIntegrator(
+            300 * unit.kelvin,
+            1 / unit.picosecond,
+            0.002 * unit.picoseconds,
+        )
         
         # Try to use CUDA, fall back to CPU if not available
         try:

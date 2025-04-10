@@ -24,10 +24,11 @@ class TestProteinMinimization:
         scope="class",
         params=[
             {"protein": "LAC3.pdb", "ligand": "Lig_Min.sdf"},
-            # {"protein": "8gcy.pdb", "ligand": "8gcy_Crystal.sdf"},
-            # {"protein": "GLP-R.pdb", "ligand": "Complex_Ligand.sdf"}
+            {"protein": "8gcy.pdb", "ligand": "8gcy_Crystal.sdf"},
+            {"protein": "GLP-R.pdb", "ligand": "GLP-R_Simple.sdf"},
+            {"protein": "GLP-R.pdb", "ligand": "Complex_Ligand.sdf"}
         ],
-        ids=["glpr"]
+        ids=["lac3", "8gcy", "glpr", "glpr_complex"]
     )
     def example_files(self, request, example_dir):
         """Return paths to sample files from the examples directory.
