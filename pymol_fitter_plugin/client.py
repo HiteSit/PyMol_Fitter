@@ -2,7 +2,7 @@ import requests
 import base64
 import json
 from pathlib import Path
-from typing import Dict, Union, Any, Optional, Tuple
+from typing import Dict, Union, Any, Optional, Tuple, List
 
 class PyMOLDockingClient:
     """
@@ -253,6 +253,91 @@ class PyMOLDockingClient:
             
             return result
             
+        except FileNotFoundError as e:
+            raise ValueError(f"File not found: {e}") from e
+        except requests.RequestException as e:
+            raise ConnectionError(f"Network error: {e}") from e
+
+    # ───────────────────────── virtual screening ──────────────────────────
+
+    def virtual_screen(
+        self,
+        protein_file: Union[str, Path],
+        ligand: Union[str, Path],
+        crystal_file: Union[str, Path],
+        is_smiles: bool = True,
+        output_name: str = "vs_run",
+        output_dir: Union[str, Path] = ".",
+    ) -> Dict[str, Path]:
+        """Run multi‑ligand virtual screening.
+
+        `ligand` may be a dot‑separated SMILES string (set `is_smiles=True`) or
+        the *filename* of a multi‑record SDF residing in the server working
+        directory (set `is_smiles=False`).
+        """
+        if not self.check_health():
+            raise ConnectionError("API is not healthy. Make sure the server is running and accessible.")
+
+        # Validate
+        if not is_smiles and not isinstance(ligand, (str, Path)):
+            raise ValueError("When is_smiles=False the ligand parameter must be a file path or string filename")
+
+        try:
+            protein_data = self._encode_file(protein_file)
+            crystal_data = self._encode_file(crystal_file)
+
+            payload: Dict[str, Any] = {
+                "protein": protein_data,
+                "crystal": crystal_data,
+                "is_smiles": is_smiles,
+                "output_name": output_name,
+            }
+
+            if is_smiles:
+                payload["ligand"] = str(ligand)
+            else:
+                # send just the file name; server expects file already present
+                payload["ligand"] = str(ligand)
+
+            resp = requests.post(f"{self.base_url}/virtual_screen", json=payload, timeout=7200)
+            if resp.status_code != 200:
+                err = resp.json().get("message", "Unknown error")
+                raise RuntimeError(f"API call failed: {err}")
+
+            data = resp.json()
+
+            out_dir = Path(output_dir)
+            out_dir.mkdir(parents=True, exist_ok=True)
+
+            results: Dict[str, Path] = {}
+
+            # Save summary CSV
+            summary_path = out_dir / f"{output_name}_summary.csv"
+            self._decode_and_save(data["summary_csv"], summary_path)
+            results["summary_csv"] = summary_path
+
+            # Save prepared protein
+            prep_path = out_dir / f"{output_name}_prepared_protein.pdb"
+            self._decode_and_save(data["prepared_protein"], prep_path)
+            results["prepared_protein"] = prep_path
+
+            # Save each docked ligand + log (iterate with index)
+            lig_paths: List[Path] = []
+            for idx, enc in enumerate(data["docked_ligands"], start=1):
+                p = out_dir / f"{output_name}_{idx}.sdf"
+                self._decode_and_save(enc, p)
+                lig_paths.append(p)
+            results["docked_ligands"] = lig_paths
+
+            log_paths: List[Path] = []
+            for idx, enc in enumerate(data["logs"], start=1):
+                p = out_dir / f"{output_name}_{idx}.log"
+                self._decode_and_save(enc, p)
+                log_paths.append(p)
+            results["logs"] = log_paths
+
+            return results
+
         except FileNotFoundError as e:
             raise ValueError(f"File not found: {e}") from e
         except requests.RequestException as e:

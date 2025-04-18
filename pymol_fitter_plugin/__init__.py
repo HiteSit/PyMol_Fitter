@@ -297,6 +297,9 @@ class PymolDockingDialog(QtWidgets.QDialog):
         self.populate_ligand_select_list()
         self.choose_docking_modes()
         self.choose_setting()
+
+        # ─────────────── add Virtual‑Screening tab programmatically ────────────────
+        self._add_vs_tab()
         
         # Connect signals to slots
         self.mode_chooser_2.currentIndexChanged.connect(self.clear_and_repopulate_selectors)
@@ -318,7 +321,11 @@ class PymolDockingDialog(QtWidgets.QDialog):
         self.ligand_chooser_1.currentIndexChanged.connect(self.update_ligand_states_1)
         self.protein_chooser_2.currentIndexChanged.connect(self.update_protein_states_2)
         
-        # Note: buttonBox is assumed to be in GUI.ui and connected to accept/reject in the UI file
+        # VS button handles OK
+        self.vs_buttonBox.accepted.connect(self.on_vs_dialog_accepted)
+        
+        # state updates for VS tab
+        self.protein_chooser_VS.currentIndexChanged.connect(self.update_protein_states_vs)
         
         # Initially set minimizer visibility based on the default mode selection
         self.on_mode_changed(self.mode_chooser.currentIndex())
@@ -760,6 +767,123 @@ class PymolDockingDialog(QtWidgets.QDialog):
             logger.error(f"Error updating protein states (off-site): {e}")
             # Default to a single state if error occurs
             self.protein_state_chooser_2.addItem("1")
+
+    # ───────────────────────── VS tab creation ──────────────────────────
+
+    def _add_vs_tab(self):
+        """Create the Virtual Screening tab with widgets mirroring Off‑Site docking."""
+        from pymol.Qt import QtCore
+
+        self.tab_vs = QtWidgets.QWidget()
+        self.tabWidget.addTab(self.tab_vs, "Virtual Screening")
+
+        # Layout container
+        layout = QtWidgets.QVBoxLayout(self.tab_vs)
+
+        # Protein row (combobox + state chooser)
+        h_prot = QtWidgets.QHBoxLayout()
+        self.protein_chooser_VS = QtWidgets.QComboBox()
+        self.protein_state_label_VS = QtWidgets.QLabel("State:")
+        self.protein_state_chooser_VS = QtWidgets.QComboBox()
+        h_prot.addWidget(self.protein_chooser_VS)
+        h_prot.addWidget(self.protein_state_label_VS)
+        h_prot.addWidget(self.protein_state_chooser_VS)
+        layout.addLayout(h_prot)
+
+        # SMILES / SDF field
+        self.smiles_field_VS = QtWidgets.QLineEdit()
+        self.smiles_field_VS.setPlaceholderText("Dot‑separated SMILES or multiLigand.sdf")
+        layout.addWidget(self.smiles_field_VS)
+
+        # Output basename
+        h_out = QtWidgets.QHBoxLayout()
+        self.output_label_VS = QtWidgets.QLabel("Basename:")
+        self.output_field_VS = QtWidgets.QLineEdit()
+        h_out.addWidget(self.output_label_VS)
+        h_out.addWidget(self.output_field_VS)
+        layout.addLayout(h_out)
+
+        # OK / Cancel buttons
+        self.vs_buttonBox = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
+        self.vs_buttonBox.rejected.connect(self.reject)
+        layout.addWidget(self.vs_buttonBox)
+
+        # populate combos
+        loaded_objects = self._get_select_list()
+        self.protein_chooser_VS.addItems(loaded_objects)
+        self.update_protein_states_vs()
+
+    # ───────────────────────── VS helpers ──────────────────────────
+
+    def update_protein_states_vs(self):
+        self.protein_state_chooser_VS.clear()
+        prot_sel = self.protein_chooser_VS.currentText()
+        if not prot_sel:
+            return
+        try:
+            obj_name = prot_sel.split()[0] if "&" in prot_sel else prot_sel
+            count = cmd.count_states(obj_name)
+            self.protein_state_chooser_VS.addItems([str(i) for i in range(1, count + 1)])
+            if count > 0:
+                self.protein_state_chooser_VS.setCurrentIndex(0)
+        except Exception as e:
+            logger.error(f"Error updating VS protein states: {e}")
+            self.protein_state_chooser_VS.addItem("1")
+
+    def on_vs_dialog_accepted(self):
+        # Check server health
+        if not docker_client.check_health():
+            print("Error: Docker server is not running. Please start the Docker server first.")
+            return
+
+        # Retrieve inputs
+        protein_sel = self.protein_chooser_VS.currentText()
+        state_idx = int(self.protein_state_chooser_VS.currentText())
+        protein_with_state = f"{protein_sel} and state {state_idx}"
+
+        ligand_text = self.smiles_field_VS.text().strip()
+        if not ligand_text:
+            print("Error: Please provide SMILES or SDF filename")
+            return
+
+        basename = self.output_field_VS.text().strip() or "vs_run"
+
+        # Detect SDF vs SMILES
+        sdf_candidate = Path(ligand_text)
+        is_smiles = not sdf_candidate.exists()
+
+        # Save protein to temp
+        protein_name = cmd.get_object_list(protein_sel)[0]
+        to_save_prot = Path(gettempdir()) / f"{protein_name}.pdb"
+        cmd.save(str(to_save_prot), protein_with_state)
+
+        crystal_file = Path("./Crystal.sdf")
+        if not crystal_file.exists():
+            print(f"Warning: Crystal file not found at {crystal_file}. Docking may fail.")
+
+        try:
+            results = docker_client.virtual_screen(
+                protein_file=to_save_prot,
+                ligand=ligand_text,
+                crystal_file=crystal_file,
+                is_smiles=is_smiles,
+                output_name=basename,
+                output_dir="."
+            )
+
+            # Load results into PyMOL and group them
+            object_names: List[str] = []
+            for idx, sdf_path in enumerate(results["docked_ligands"], start=1):
+                obj_name = f"{basename}_{idx}"
+                cmd.load(str(sdf_path), obj_name)
+                object_names.append(obj_name)
+            # Group
+            cmd.group(basename, " ".join(object_names))
+
+            print(f"Virtual screening completed successfully! Loaded {len(object_names)} poses grouped as '{basename}'.")
+        except Exception as e:
+            print(f"Error during virtual screening: {e}")
+            logger.exception("VS error:")
 
 # Plugin initialization for PyMOL
 def __init_plugin__(app=None):

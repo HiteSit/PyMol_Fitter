@@ -168,5 +168,89 @@ def minimize():
         logger.error(f"Error during minimization: {e}", exc_info=True)
         return jsonify({"success": False, "message": f"Error: {str(e)}"}), 500
 
+@app.route('/virtual_screen', methods=["POST"])
+def virtual_screen():
+    """Virtual‑screening endpoint: supports multi‑SMILES (dot‑separated) **or** a multi‑record SDF.
+
+    Expected JSON keys – all base‑64 except *ligand* when using the SMILES/SDF‑filename mode:
+        protein   : base64‑encoded PDB string (mandatory)
+        ligand    : (str) either dot‑separated SMILES or an *.sdf file name present in the container pwd
+        crystal   : base64‑encoded SDF defining the binding‑site (mandatory)
+        is_smiles : bool flag – true when *ligand* is SMILES, false when it is an SDF file name
+        output_name : basename for generated files (summary CSV & pose SDFs)
+    """
+    try:
+        data = request.get_json()
+
+        protein_data = data.get("protein")
+        ligand_raw = data.get("ligand")
+        crystal_data = data.get("crystal")
+        is_smiles = data.get("is_smiles", True)
+        output_name = data.get("output_name", "vs_run")
+
+        # Mandatory checks
+        if not protein_data:
+            return jsonify({"success": False, "message": "No protein data provided"}), 400
+        if not ligand_raw:
+            return jsonify({"success": False, "message": "No ligand data provided"}), 400
+        if not crystal_data:
+            return jsonify({"success": False, "message": "No crystal data provided"}), 400
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_dir_path = Path(temp_dir)
+
+            # --- protein ---
+            protein_path = temp_dir_path / "protein.pdb"
+            if protein_data.startswith("data:"):
+                protein_data = protein_data.split(",", 1)[1]
+            with open(protein_path, "wb") as fh:
+                fh.write(base64.b64decode(protein_data))
+
+            # --- ligand ---
+            if is_smiles:
+                ligand_input = ligand_raw  # raw string of dot‑separated SMILES
+            else:
+                # treat as file name that is expected to exist in cwd (inside container)
+                candidate = Path(ligand_raw)
+                if not candidate.exists():
+                    return jsonify({"success": False, "message": f"SDF file '{ligand_raw}' not found in working directory"}), 400
+                ligand_input = ligand_raw  # pass as str path
+
+            # --- crystal ---
+            crystal_sdf_path = temp_dir_path / "crystal.sdf"
+            if crystal_data.startswith("data:"):
+                crystal_data = crystal_data.split(",", 1)[1]
+            with open(crystal_sdf_path, "wb") as fh:
+                fh.write(base64.b64decode(crystal_data))
+
+            # run VS
+            docking_class = Pymol_Docking(
+                str(protein_path), ligand_input, str(crystal_sdf_path), is_smiles=is_smiles, virtual_screening=True
+            )
+            res = docking_class.run_virtual_screen(output_name)
+
+            # encode outputs
+            def _encode(p: Path) -> str:
+                with open(p, "rb") as fh:
+                    return base64.b64encode(fh.read()).decode("utf-8")
+
+            encoded_ligands = [_encode(p) for p in res["docked_ligands"]]
+            encoded_logs = [_encode(p) for p in res["logs"]]
+            encoded_summary = _encode(res["summary"])
+            encoded_protein = _encode(res["prepared_protein"])
+
+            return jsonify({
+                "success": True,
+                "message": "Virtual screening completed successfully",
+                "docked_ligands": encoded_ligands,
+                "logs": encoded_logs,
+                "summary_csv": encoded_summary,
+                "prepared_protein": encoded_protein,
+            })
+
+    except Exception as e:
+        logger.error(f"Error during virtual screening: {e}", exc_info=True)
+        return jsonify({"success": False, "message": f"Error: {str(e)}"}), 500
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True) 

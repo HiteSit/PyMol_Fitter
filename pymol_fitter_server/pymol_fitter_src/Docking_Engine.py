@@ -5,6 +5,9 @@ import subprocess
 from pathlib import Path
 from tempfile import _TemporaryFileWrapper, gettempdir, NamedTemporaryFile
 from typing import Dict, Any, List, Literal, Optional, Tuple, Union
+import csv
+import multiprocessing as mp
+from functools import partial
 
 # Third party imports
 from Bio.PDB import PDBParser
@@ -55,12 +58,16 @@ class Pymol_Docking:
         ligands_sdf: Path to the ligand SDF file (if input_mode is "SDF")
     """
 
+    # authoritative SDF tag used by smina for affinity (see docs & community threads)
+    _SMINA_TAG = "minimizedAffinity"
+
     def __init__(
-        self, 
-        protein_pdb: str, 
-        input_ligands: str, 
-        crystal_sdf: Optional[str] = None, 
-        is_smiles: bool = False
+        self,
+        protein_pdb: str,
+        input_ligands: str,
+        crystal_sdf: Optional[str] = None,
+        is_smiles: bool = False,
+        virtual_screening: bool = False,
     ):
         """
         Initialize the Pymol_Docking class.
@@ -70,6 +77,7 @@ class Pymol_Docking:
             input_ligands: Either a SMILES string or path to ligand SDF file
             crystal_sdf: Path to the crystal SDF file (optional)
             is_smiles: Whether input_ligands is a SMILES string
+            virtual_screening: Whether to enable virtual screening
         """
         self.workdir: Path = Path(os.getcwd())
         self.protein_pdb: Path = Path(protein_pdb)
@@ -79,6 +87,8 @@ class Pymol_Docking:
             self.crystal_sdf: Path = Path(crystal_sdf)
         
         self.protein_preared = None
+        
+        self.virtual_screening = virtual_screening  # VS flag
         
         if is_smiles:
             self.ligands_smiles: str = input_ligands
@@ -472,6 +482,95 @@ class Pymol_Docking:
             
         except Exception as e:
             raise RuntimeError(f"Error in complex minimization: {e}") from e
+
+    # ────────────────── explode to per‑ligand SDFs (VS) ─────────────────
+
+    def _explode_multi_ligands(self, tmpdir: Path) -> List[Tuple[Path, str]]:
+        """Return list of (sdf_path, ligand_name) for VS."""
+        ligs: List[Tuple[Path, str]] = []
+        if self.input_mode == "SDF":
+            mols = dm.read_sdf(self.ligands_sdf, sanitize=False)
+            assert len(mols) > 1, "virtual_screening=True but SDF has ≤1 record"
+            for i, m in enumerate(mols, 1):
+                name = m.GetProp("_Name") or f"lig_{i}"
+                p = tmpdir / f"{name}.sdf"; dm.to_sdf(m, p); ligs.append((p, name))
+        else:
+            smi_list = [s for s in self.ligands_smiles.split(".") if s]
+            assert len(smi_list) > 1, "virtual_screening=True but only one SMILES"
+            for i, smi in enumerate(smi_list, 1):
+                mol = dm.to_mol(smi, sanitize=True, kekulize=True)
+                mol.SetProp("_Name", f"lig_{i}")
+                p = tmpdir / f"lig_{i}.sdf"; dm.to_sdf(mol, p); ligs.append((p, f"lig_{i}"))
+        return ligs
+
+    # ────────────────────────── smina wrapper ──────────────────────────
+
+    @staticmethod
+    def _smina_single(
+        protein: Path,
+        crystal: Path,
+        lig_tuple: Tuple[Path, str],
+        exhaust: int,
+        outdir: Path,
+    ) -> Dict[str, object]:
+        lig_path, lig_name = lig_tuple
+        out_base = outdir / lig_name
+        out_sdf, out_log = out_base.with_suffix(".sdf"), out_base.with_suffix(".log")
+
+        cmd_lst = [
+            "smina", "-r", str(protein), "-l", str(lig_path),
+            "--autobox_ligand", str(crystal),
+            "--exhaustiveness", str(exhaust), "--cpu", "1",
+            "-o", str(out_sdf),
+        ]
+
+        with open(out_log, "w") as lf:
+            subprocess.run(cmd_lst, check=True, stdout=lf, stderr=lf)
+
+        # fetch affinity if present
+        aff: Optional[float] = None
+        try:
+            mol = dm.read_sdf(out_sdf, sanitize=False)[0]
+            if mol.HasProp(Pymol_Docking._SMINA_TAG):
+                aff = float(mol.GetProp(Pymol_Docking._SMINA_TAG))
+        except Exception:
+            pass
+
+        return {"name": lig_name, "sdf": out_sdf, "log": out_log, "aff": aff}
+
+    # ─────────────────────────── public VS API ──────────────────────────
+
+    def run_virtual_screen(self, basename: str) -> Dict[str, object]:
+        """Execute docking‑only screen across **multiple** ligands."""
+        if not self.virtual_screening:
+            raise RuntimeError("Instantiate with virtual_screening=True to run VS")
+
+        protein = self.prepare_protein()
+        crystal = self.crystal_sdf.resolve()
+
+        tmpdir = Path(gettempdir()) / f"vs_{os.getpid()}"; tmpdir.mkdir(exist_ok=True)
+        ligand_list = self._explode_multi_ligands(tmpdir)
+
+        cpu = max(1, int(os.cpu_count() * 0.9))
+        worker = partial(self._smina_single, protein, crystal, exhaust=8, outdir=self.workdir)
+
+        with mp.Pool(cpu) as pool:
+            res = pool.map(worker, ligand_list)
+
+        # write CSV summary
+        csv_path = self.workdir / f"{basename}_summary.csv"
+        with open(csv_path, "w", newline="") as fh:
+            wr = csv.writer(fh); wr.writerow(["ligand", Pymol_Docking._SMINA_TAG])
+            for r in res:
+                wr.writerow([r["name"], r["aff"]])
+
+        return {
+            "success": True,
+            "docked_ligands": [r["sdf"] for r in res],
+            "logs": [r["log"] for r in res],
+            "summary": csv_path,
+            "prepared_protein": protein,
+        }
 
 
 def outer_minimization(
