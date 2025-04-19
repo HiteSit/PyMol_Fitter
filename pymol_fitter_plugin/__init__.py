@@ -774,41 +774,52 @@ class PymolDockingDialog(QtWidgets.QDialog):
         """Create the Virtual Screening tab with widgets mirroring Off‑Site docking."""
         from pymol.Qt import QtCore
 
+        # Create tab
         self.tab_vs = QtWidgets.QWidget()
         self.tabWidget.addTab(self.tab_vs, "Virtual Screening")
 
-        # Layout container
-        layout = QtWidgets.QVBoxLayout(self.tab_vs)
+        # Create container with explicit positioning (like Minimization tab)
+        self.verticalLayoutWidget_vs = QtWidgets.QWidget(self.tab_vs)
+        self.verticalLayoutWidget_vs.setGeometry(QtCore.QRect(150, 60, 301, 141))
+        self.verticalLayout_vs = QtWidgets.QVBoxLayout(self.verticalLayoutWidget_vs)
+        self.verticalLayout_vs.setContentsMargins(0, 0, 0, 0)
 
         # Protein row (combobox + state chooser)
-        h_prot = QtWidgets.QHBoxLayout()
-        self.protein_chooser_VS = QtWidgets.QComboBox()
-        self.protein_state_label_VS = QtWidgets.QLabel("State:")
-        self.protein_state_chooser_VS = QtWidgets.QComboBox()
-        h_prot.addWidget(self.protein_chooser_VS)
-        h_prot.addWidget(self.protein_state_label_VS)
-        h_prot.addWidget(self.protein_state_chooser_VS)
-        layout.addLayout(h_prot)
+        self.protein_state_layout_vs = QtWidgets.QHBoxLayout()
+        self.protein_chooser_VS = QtWidgets.QComboBox(self.verticalLayoutWidget_vs)
+        self.protein_state_label_VS = QtWidgets.QLabel("State:", self.verticalLayoutWidget_vs)
+        self.protein_state_chooser_VS = QtWidgets.QComboBox(self.verticalLayoutWidget_vs)
+        self.protein_state_layout_vs.addWidget(self.protein_chooser_VS)
+        self.protein_state_layout_vs.addWidget(self.protein_state_label_VS)
+        self.protein_state_layout_vs.addWidget(self.protein_state_chooser_VS)
+        self.verticalLayout_vs.addLayout(self.protein_state_layout_vs)
 
         # SMILES / SDF field
-        self.smiles_field_VS = QtWidgets.QLineEdit()
+        self.smiles_field_VS = QtWidgets.QLineEdit(self.verticalLayoutWidget_vs)
         self.smiles_field_VS.setPlaceholderText("Dot‑separated SMILES or multiLigand.sdf")
-        layout.addWidget(self.smiles_field_VS)
+        self.verticalLayout_vs.addWidget(self.smiles_field_VS)
 
         # Output basename
-        h_out = QtWidgets.QHBoxLayout()
-        self.output_label_VS = QtWidgets.QLabel("Basename:")
-        self.output_field_VS = QtWidgets.QLineEdit()
-        h_out.addWidget(self.output_label_VS)
-        h_out.addWidget(self.output_field_VS)
-        layout.addLayout(h_out)
+        self.output_layout_vs = QtWidgets.QHBoxLayout()
+        self.output_label_VS = QtWidgets.QLabel("Basename:", self.verticalLayoutWidget_vs)
+        self.output_field_VS = QtWidgets.QLineEdit(self.verticalLayoutWidget_vs)
+        self.output_layout_vs.addWidget(self.output_label_VS)
+        self.output_layout_vs.addWidget(self.output_field_VS)
+        self.verticalLayout_vs.addLayout(self.output_layout_vs)
 
         # OK / Cancel buttons
-        self.vs_buttonBox = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
+        self.vs_buttonBox = QtWidgets.QDialogButtonBox(self.tab_vs)
+        self.vs_buttonBox.setGeometry(QtCore.QRect(230, 220, 151, 28))
+        self.vs_buttonBox.setStandardButtons(
+            QtWidgets.QDialogButtonBox.Cancel | QtWidgets.QDialogButtonBox.Ok
+        )
         self.vs_buttonBox.rejected.connect(self.reject)
-        layout.addWidget(self.vs_buttonBox)
+        self.vs_buttonBox.accepted.connect(self.on_vs_dialog_accepted)
 
-        # populate combos
+        # Connect protein selector to state updater
+        self.protein_chooser_VS.currentIndexChanged.connect(self.update_protein_states_vs)
+
+        # Populate combos
         loaded_objects = self._get_select_list()
         self.protein_chooser_VS.addItems(loaded_objects)
         self.update_protein_states_vs()
