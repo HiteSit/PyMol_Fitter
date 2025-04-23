@@ -16,6 +16,7 @@ A powerful PyMOL plugin for molecular docking and minimization that leverages Do
     - Pose assessment with PoseBusters
     - Detailed docking logs and scores
 - **User-friendly GUI** integrated into PyMOL's interface
+- **Convenient protein-ligand contacts visualization** with F3 key binding
 
 ## 🏗️ Architecture
 
@@ -119,6 +120,21 @@ The project is organized into three main components:
 1. Open PyMOL
 2. The plugin will be available in the Plugin menu as "Pymol Fitter"
 3. Click on it to open the plugin interface
+
+### Using the Contacts Plugin
+
+1. The repository includes the `dkoes_show_contacts.py` plugin for visualizing protein-ligand contacts
+2. To install this plugin, download it from:
+   ```
+   https://github.com/HiteSit/PyMol_Fitter/blob/master/dkoes_show_contacts.py
+   ```
+3. To use the plugin:
+   - Select any molecule/ligand using PyMOL's selection tools
+   - Press **F3** to visualize contacts between the selection and any protein
+   - The plugin will show polar contacts, hydrogen bonds, and potential clashes
+   - Different types of contacts are color-coded and grouped
+
+4. This plugin was originally developed by David Koes (https://github.com/dkoes) and is particularly useful for examining protein-ligand interactions after docking
 
 ### Environment Preparation
 
