@@ -176,7 +176,7 @@ cmd.extend('contacts', show_contacts) #contacts to avoid clashing with cluster_m
 
 def show_sele_protein_contacts():
     selection = "sele"
-    protein = "polymer.protein & enabled"
+    protein = "(polymer.protein or resn HOH) & enabled"
     
     # Get the list of objects in the 'sele' selection
     objects = cmd.get_object_list(selection)
