@@ -301,9 +301,6 @@ class PymolDockingDialog(QtWidgets.QDialog):
         # ─────────────── add Virtual‑Screening tab programmatically ────────────────
         self._add_vs_tab()
         
-        # ─────────────── add Energy Minimization tab programmatically ────────────────
-        self._add_energy_min_tab()
-        
         # Connect signals to slots
         self.mode_chooser_2.currentIndexChanged.connect(self.clear_and_repopulate_selectors)
         self.mode_chooser.currentIndexChanged.connect(self.on_mode_changed)
@@ -899,113 +896,113 @@ class PymolDockingDialog(QtWidgets.QDialog):
             print(f"Error during virtual screening: {e}")
             logger.exception("VS error:")
 
-    # ───────────────────────── Energy Minimization tab ──────────────────────────
-    def _add_energy_min_tab(self):
-        """Create the Energy Minimization tab with advanced settings."""
-        from pymol.Qt import QtCore
+    # # ───────────────────────── Energy Minimization tab ──────────────────────────
+    # def _add_energy_min_tab(self):
+    #     """Create the Energy Minimization tab with advanced settings."""
+    #     from pymol.Qt import QtCore
 
-        # Create tab
-        self.tab_energy = QtWidgets.QWidget()
-        self.tabWidget.addTab(self.tab_energy, "Energy Minimization")
+    #     # Create tab
+    #     self.tab_energy = QtWidgets.QWidget()
+    #     self.tabWidget.addTab(self.tab_energy, "Energy Minimization")
 
-        # Create main container
-        self.verticalLayoutWidget_energy = QtWidgets.QWidget(self.tab_energy)
-        self.verticalLayoutWidget_energy.setGeometry(QtCore.QRect(50, 20, 500, 230))
-        self.verticalLayout_energy = QtWidgets.QVBoxLayout(self.verticalLayoutWidget_energy)
-        self.verticalLayout_energy.setContentsMargins(0, 0, 0, 0)
+    #     # Create main container
+    #     self.verticalLayoutWidget_energy = QtWidgets.QWidget(self.tab_energy)
+    #     self.verticalLayoutWidget_energy.setGeometry(QtCore.QRect(50, 20, 500, 230))
+    #     self.verticalLayout_energy = QtWidgets.QVBoxLayout(self.verticalLayoutWidget_energy)
+    #     self.verticalLayout_energy.setContentsMargins(0, 0, 0, 0)
 
-        # Selection group
-        self.selection_group = QtWidgets.QGroupBox("Molecule Selection", self.verticalLayoutWidget_energy)
-        self.selection_layout = QtWidgets.QVBoxLayout(self.selection_group)
+    #     # Selection group
+    #     self.selection_group = QtWidgets.QGroupBox("Molecule Selection", self.verticalLayoutWidget_energy)
+    #     self.selection_layout = QtWidgets.QVBoxLayout(self.selection_group)
 
-        # Protein row
-        self.protein_energy_layout = QtWidgets.QHBoxLayout()
-        self.protein_energy_label = QtWidgets.QLabel("Protein:", self.selection_group)
-        self.protein_chooser_energy = QtWidgets.QComboBox(self.selection_group)
-        self.protein_state_label_energy = QtWidgets.QLabel("State:", self.selection_group)
-        self.protein_state_chooser_energy = QtWidgets.QComboBox(self.selection_group)
-        self.protein_energy_layout.addWidget(self.protein_energy_label)
-        self.protein_energy_layout.addWidget(self.protein_chooser_energy)
-        self.protein_energy_layout.addWidget(self.protein_state_label_energy)
-        self.protein_energy_layout.addWidget(self.protein_state_chooser_energy)
-        self.selection_layout.addLayout(self.protein_energy_layout)
+    #     # Protein row
+    #     self.protein_energy_layout = QtWidgets.QHBoxLayout()
+    #     self.protein_energy_label = QtWidgets.QLabel("Protein:", self.selection_group)
+    #     self.protein_chooser_energy = QtWidgets.QComboBox(self.selection_group)
+    #     self.protein_state_label_energy = QtWidgets.QLabel("State:", self.selection_group)
+    #     self.protein_state_chooser_energy = QtWidgets.QComboBox(self.selection_group)
+    #     self.protein_energy_layout.addWidget(self.protein_energy_label)
+    #     self.protein_energy_layout.addWidget(self.protein_chooser_energy)
+    #     self.protein_energy_layout.addWidget(self.protein_state_label_energy)
+    #     self.protein_energy_layout.addWidget(self.protein_state_chooser_energy)
+    #     self.selection_layout.addLayout(self.protein_energy_layout)
 
-        # Include ligand checkbox
-        self.include_ligand_check = QtWidgets.QCheckBox("Include Ligand", self.selection_group)
-        self.selection_layout.addWidget(self.include_ligand_check)
+    #     # Include ligand checkbox
+    #     self.include_ligand_check = QtWidgets.QCheckBox("Include Ligand", self.selection_group)
+    #     self.selection_layout.addWidget(self.include_ligand_check)
 
-        # Ligand row (initially hidden)
-        self.ligand_energy_layout = QtWidgets.QHBoxLayout()
-        self.ligand_energy_label = QtWidgets.QLabel("Ligand:", self.selection_group)
-        self.ligand_chooser_energy = QtWidgets.QComboBox(self.selection_group)
-        self.ligand_state_label_energy = QtWidgets.QLabel("State:", self.selection_group)
-        self.ligand_state_chooser_energy = QtWidgets.QComboBox(self.selection_group)
-        self.ligand_energy_layout.addWidget(self.ligand_energy_label)
-        self.ligand_energy_layout.addWidget(self.ligand_chooser_energy)
-        self.ligand_energy_layout.addWidget(self.ligand_state_label_energy)
-        self.ligand_energy_layout.addWidget(self.ligand_state_chooser_energy)
-        self.selection_layout.addLayout(self.ligand_energy_layout)
+    #     # Ligand row (initially hidden)
+    #     self.ligand_energy_layout = QtWidgets.QHBoxLayout()
+    #     self.ligand_energy_label = QtWidgets.QLabel("Ligand:", self.selection_group)
+    #     self.ligand_chooser_energy = QtWidgets.QComboBox(self.selection_group)
+    #     self.ligand_state_label_energy = QtWidgets.QLabel("State:", self.selection_group)
+    #     self.ligand_state_chooser_energy = QtWidgets.QComboBox(self.selection_group)
+    #     self.ligand_energy_layout.addWidget(self.ligand_energy_label)
+    #     self.ligand_energy_layout.addWidget(self.ligand_chooser_energy)
+    #     self.ligand_energy_layout.addWidget(self.ligand_state_label_energy)
+    #     self.ligand_energy_layout.addWidget(self.ligand_state_chooser_energy)
+    #     self.selection_layout.addLayout(self.ligand_energy_layout)
         
-        self.verticalLayout_energy.addWidget(self.selection_group)
+    #     self.verticalLayout_energy.addWidget(self.selection_group)
 
-        # Parameters group
-        self.params_group = QtWidgets.QGroupBox("Minimization Parameters", self.verticalLayoutWidget_energy)
-        self.params_layout = QtWidgets.QVBoxLayout(self.params_group)
+    #     # Parameters group
+    #     self.params_group = QtWidgets.QGroupBox("Minimization Parameters", self.verticalLayoutWidget_energy)
+    #     self.params_layout = QtWidgets.QVBoxLayout(self.params_group)
 
-        # Force field selection
-        self.forcefield_layout = QtWidgets.QHBoxLayout()
-        self.forcefield_label = QtWidgets.QLabel("Force Field:", self.params_group)
-        self.forcefield_combo = QtWidgets.QComboBox(self.params_group)
-        self.forcefield_combo.addItems(["AMBER", "CHARMM", "MMFF"])
-        self.forcefield_layout.addWidget(self.forcefield_label)
-        self.forcefield_layout.addWidget(self.forcefield_combo)
-        self.params_layout.addLayout(self.forcefield_layout)
+    #     # Force field selection
+    #     self.forcefield_layout = QtWidgets.QHBoxLayout()
+    #     self.forcefield_label = QtWidgets.QLabel("Force Field:", self.params_group)
+    #     self.forcefield_combo = QtWidgets.QComboBox(self.params_group)
+    #     self.forcefield_combo.addItems(["AMBER", "CHARMM", "MMFF"])
+    #     self.forcefield_layout.addWidget(self.forcefield_label)
+    #     self.forcefield_layout.addWidget(self.forcefield_combo)
+    #     self.params_layout.addLayout(self.forcefield_layout)
 
-        # Max iterations
-        self.iterations_layout = QtWidgets.QHBoxLayout()
-        self.iterations_label = QtWidgets.QLabel("Max Iterations:", self.params_group)
-        self.iterations_spin = QtWidgets.QSpinBox(self.params_group)
-        self.iterations_spin.setRange(100, 10000)
-        self.iterations_spin.setValue(1000)
-        self.iterations_spin.setSingleStep(100)
-        self.iterations_layout.addWidget(self.iterations_label)
-        self.iterations_layout.addWidget(self.iterations_spin)
-        self.params_layout.addLayout(self.iterations_layout)
+    #     # Max iterations
+    #     self.iterations_layout = QtWidgets.QHBoxLayout()
+    #     self.iterations_label = QtWidgets.QLabel("Max Iterations:", self.params_group)
+    #     self.iterations_spin = QtWidgets.QSpinBox(self.params_group)
+    #     self.iterations_spin.setRange(100, 10000)
+    #     self.iterations_spin.setValue(1000)
+    #     self.iterations_spin.setSingleStep(100)
+    #     self.iterations_layout.addWidget(self.iterations_label)
+    #     self.iterations_layout.addWidget(self.iterations_spin)
+    #     self.params_layout.addLayout(self.iterations_layout)
 
-        # Output name
-        self.output_energy_layout = QtWidgets.QHBoxLayout()
-        self.output_energy_label = QtWidgets.QLabel("Output Name:", self.params_group)
-        self.output_energy_field = QtWidgets.QLineEdit(self.params_group)
-        self.output_energy_field.setPlaceholderText("energy_minimized")
-        self.output_energy_layout.addWidget(self.output_energy_label)
-        self.output_energy_layout.addWidget(self.output_energy_field)
-        self.params_layout.addLayout(self.output_energy_layout)
+    #     # Output name
+    #     self.output_energy_layout = QtWidgets.QHBoxLayout()
+    #     self.output_energy_label = QtWidgets.QLabel("Output Name:", self.params_group)
+    #     self.output_energy_field = QtWidgets.QLineEdit(self.params_group)
+    #     self.output_energy_field.setPlaceholderText("energy_minimized")
+    #     self.output_energy_layout.addWidget(self.output_energy_label)
+    #     self.output_energy_layout.addWidget(self.output_energy_field)
+    #     self.params_layout.addLayout(self.output_energy_layout)
 
-        self.verticalLayout_energy.addWidget(self.params_group)
+    #     self.verticalLayout_energy.addWidget(self.params_group)
 
-        # OK / Cancel buttons
-        self.energy_buttonBox = QtWidgets.QDialogButtonBox(self.tab_energy)
-        self.energy_buttonBox.setGeometry(QtCore.QRect(230, 260, 151, 28))
-        self.energy_buttonBox.setStandardButtons(
-            QtWidgets.QDialogButtonBox.Cancel | QtWidgets.QDialogButtonBox.Ok
-        )
-        self.energy_buttonBox.rejected.connect(self.reject)
-        self.energy_buttonBox.accepted.connect(self.on_energy_dialog_accepted)
+    #     # OK / Cancel buttons
+    #     self.energy_buttonBox = QtWidgets.QDialogButtonBox(self.tab_energy)
+    #     self.energy_buttonBox.setGeometry(QtCore.QRect(230, 260, 151, 28))
+    #     self.energy_buttonBox.setStandardButtons(
+    #         QtWidgets.QDialogButtonBox.Cancel | QtWidgets.QDialogButtonBox.Ok
+    #     )
+    #     self.energy_buttonBox.rejected.connect(self.reject)
+    #     self.energy_buttonBox.accepted.connect(self.on_energy_dialog_accepted)
 
-        # Connect signals
-        self.protein_chooser_energy.currentIndexChanged.connect(self.update_protein_states_energy)
-        self.ligand_chooser_energy.currentIndexChanged.connect(self.update_ligand_states_energy)
-        self.include_ligand_check.toggled.connect(self.toggle_ligand_selection)
+    #     # Connect signals
+    #     self.protein_chooser_energy.currentIndexChanged.connect(self.update_protein_states_energy)
+    #     self.ligand_chooser_energy.currentIndexChanged.connect(self.update_ligand_states_energy)
+    #     self.include_ligand_check.toggled.connect(self.toggle_ligand_selection)
 
-        # Populate initial selectors
-        loaded_objects = self._get_select_list()
-        self.protein_chooser_energy.addItems(loaded_objects)
-        self.ligand_chooser_energy.addItems(loaded_objects)
-        self.update_protein_states_energy()
-        self.update_ligand_states_energy()
+    #     # Populate initial selectors
+    #     loaded_objects = self._get_select_list()
+    #     self.protein_chooser_energy.addItems(loaded_objects)
+    #     self.ligand_chooser_energy.addItems(loaded_objects)
+    #     self.update_protein_states_energy()
+    #     self.update_ligand_states_energy()
 
-        # Initially hide ligand selection
-        self.toggle_ligand_selection(False)
+    #     # Initially hide ligand selection
+    #     self.toggle_ligand_selection(False)
 
     def toggle_ligand_selection(self, include_ligand):
         """Show or hide ligand selection based on checkbox."""
