@@ -225,7 +225,7 @@ class CDPK_Runner:
             if self.gen3d:
                 Chem.setMultiConfExportParameter(writer, False)
                 struct_gen = ConfGen.StructureGenerator()
-                status_to_str = { ConfGen.ReturnCode.UNINITIALIZED                  : 'uninitialized',
+                status_to_str = { ConfGen.ReturnCode.UNINITIALIZED                                  : 'uninitialized',
                                 ConfGen.ReturnCode.TIMEOUT                                          : 'max. processing time exceeded',
                                 ConfGen.ReturnCode.ABORTED                                          : 'aborted',
                                 ConfGen.ReturnCode.FORCEFIELD_SETUP_FAILED                          : 'force field setup failed',

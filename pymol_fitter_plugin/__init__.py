@@ -886,7 +886,7 @@ class PymolDockingDialog(QtWidgets.QDialog):
             object_names: List[str] = []
             for idx, sdf_path in enumerate(results["docked_ligands"], start=1):
                 obj_name = f"{basename}_{idx}"
-                cmd.load(str(sdf_path), obj_name)
+                cmd.load(str(sdf_path), obj_name, state=1)
                 object_names.append(obj_name)
             # Group
             cmd.group(basename, " ".join(object_names))
