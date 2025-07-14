@@ -3,9 +3,11 @@ FROM mambaorg/micromamba:2.0.8
 
 USER root
 RUN apt-get update && apt-get install -y \
+    build-essential \
     libgl1-mesa-glx \
     libglu1-mesa \
     libxrender1 \
+    libgomp1 \
     git \
     curl \
     wget \

@@ -34,11 +34,17 @@ services:
       - "5000:5000"
     volumes:
       - ./data:/app/data
+      - /usr/local/cuda-12:/usr/local/cuda-12
     restart: unless-stopped
     environment:
       - FLASK_APP=app.py
       - FLASK_ENV=production
       - GUNICORN_TIMEOUT=1200  # 20 minutes
+      - PATH=/usr/local/cuda-12/bin:${PATH}
+      - LD_LIBRARY_PATH=/usr/local/cuda-12/lib64:${LD_LIBRARY_PATH}
+      - GPU_INCLUDE_PATH=/usr/local/cuda-12/include
+      - GPU_LIBRARY_PATH=/usr/local/cuda-12/lib64
+      - CUDA_HOME=/usr/local/cuda-12
     profiles:
       - gpu
     deploy:
