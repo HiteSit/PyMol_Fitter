@@ -11,6 +11,7 @@ from functools import partial
 
 # Third party imports
 from Bio.PDB import PDBParser
+from scrubber import Scrub
 from Bio.PDB.PDBIO import PDBIO
 import biotite.structure as struc
 from biotite.structure.io import pdb
@@ -206,9 +207,141 @@ class Pymol_Docking:
                 os.unlink(TMP_fixed_sdf.name)
             raise RuntimeError(f"Error in CDPK fixer: {e}") from e
     
+    @staticmethod
+    def meeko_fixer(input_sdf: Path, mode: Literal["Dock", "Minimize"]) -> Path:
+        """
+        Fix ligand structures using Meeko/Scrub for protonation.
+
+        Args:
+            input_sdf: Path to the input SDF file
+            mode: Mode of operation, either "Dock" or "Minimize" (parameter maintained for compatibility)
+
+        Returns:
+            Path to the fixed SDF file
+
+        Raises:
+            ValueError: If mode is not "Dock" or "Minimize"
+            FileNotFoundError: If input SDF file doesn't exist
+        """
+        if mode not in ["Dock", "Minimize"]:
+            raise ValueError("Mode must be either 'Dock' or 'Minimize'")
+            
+        if not input_sdf.exists():
+            raise FileNotFoundError(f"Input SDF file not found: {input_sdf}")
+        
+        try:
+            TMP_fixed_sdf: _TemporaryFileWrapper[bytes] = NamedTemporaryFile(suffix=".sdf", delete=False)
+            
+            # Mode parameter is kept for API compatibility but doesn't affect functionality
+            # in this implementation
+            
+            scrub = Scrub(
+                ph_low=7.2,  # Default pH
+                ph_high=7.4,
+            )
+            
+            # Read molecule from SDF
+            mols = dm.read_sdf(input_sdf)
+            if not mols or len(mols) == 0:
+                raise ValueError(f"No molecules found in {input_sdf}")
+            
+            mol = mols[0]
+            if mol is None:
+                raise ValueError(f"Could not read molecule from {input_sdf}")
+            
+            mols_states = []
+            for mol_state in scrub(mol):
+                mols_states.append(mol_state)
+            
+            if not mols_states or len(mols_states) == 0:
+                raise ValueError(f"Scrub did not generate any molecular states for {input_sdf}")
+            
+            best_mol_state = mols_states[0]
+            dm.to_sdf(best_mol_state, TMP_fixed_sdf.name)
+            
+            logger.info(f"Meeko fixed ligands saved to: {TMP_fixed_sdf.name}")
+            return Path(TMP_fixed_sdf.name)
+            
+        except Exception as e:
+            if TMP_fixed_sdf and os.path.exists(TMP_fixed_sdf.name):
+                os.unlink(TMP_fixed_sdf.name)
+            raise RuntimeError(f"Error in Meeko fixer: {e}") from e
+    
+    # def prepare_ligands(self, mode: Literal["Dock", "Minimize"]) -> Tuple[Path, Path]:
+    #     """
+    #     Prepare ligands for docking or minimization.
+
+    #     Args:
+    #         mode: Mode of operation, either "Dock" or "Minimize"
+
+    #     Returns:
+    #         Tuple of (fixed_ligands_path, fixed_crystal_path)
+
+    #     Raises:
+    #         ValueError: If mode is invalid or input mode is incompatible 
+    #         RuntimeError: If ligand preparation fails
+    #     """
+    #     if mode not in ["Dock", "Minimize"]:
+    #         raise ValueError("Mode must be either 'Dock' or 'Minimize'")
+        
+    #     def _rdkit_addhs(mol_path: Path) -> Path:
+    #         """Add hydrogens to molecules using RDKit."""
+    #         try:
+    #             tmp_file = NamedTemporaryFile(suffix=".sdf", delete=False)
+    #             mols = dm.read_sdf(mol_path)
+    #             if not mols:
+    #                 raise ValueError(f"No molecules found in {mol_path}")
+                    
+    #             mols_H = []
+    #             for mol in mols:
+    #                 mol_H = dm.add_hs(mol, add_coords=True)
+    #                 mols_H.append(mol_H)
+                
+    #             dm.to_sdf(mols_H, tmp_file.name)
+    #             return Path(tmp_file.name)
+    #         except Exception as e:
+    #             if os.path.exists(tmp_file.name):
+    #                 os.unlink(tmp_file.name)
+    #             raise RuntimeError(f"Error adding hydrogens: {e}") from e
+        
+    #     try:
+    #         if mode == "Dock":
+    #             if self.input_mode == "SDF":
+    #                 logger.info("Preparing ligands from SDF")
+    #                 fixed_crystal = self.crystal_sdf.resolve()
+    #                 fixed_ligands = self.cdpk_fixer(self.ligands_sdf, mode)
+                
+    #             elif self.input_mode == "SMILES":
+    #                 logger.info("Preparing ligands from SMILES")
+    #                 TMP_SMILES_SDF = Path(gettempdir()) / "TMP_SMILES.sdf"
+    #                 mol = dm.to_mol(self.ligands_smiles, sanitize=True, kekulize=True)
+    #                 if mol is None:
+    #                     raise ValueError(f"Failed to convert SMILES to molecule: {self.ligands_smiles}")
+                        
+    #                 mol.SetProp("_Name", "ligand")
+    #                 dm.to_sdf(mol, TMP_SMILES_SDF)
+                    
+    #                 fixed_crystal = self.crystal_sdf.resolve()
+    #                 fixed_ligands = self.cdpk_fixer(TMP_SMILES_SDF, mode)
+                    
+    #             return _rdkit_addhs(fixed_ligands), fixed_crystal
+                
+    #         elif mode == "Minimize":
+    #             if self.input_mode != "SDF":
+    #                 raise ValueError("Minimization only works with SDF input")
+                    
+    #             logger.info("Preparing ligands for minimization")
+    #             fixed_crystal = self.crystal_sdf.resolve()
+    #             fixed_ligands = self.cdpk_fixer(self.ligands_sdf, mode)
+                
+    #             return _rdkit_addhs(fixed_ligands), fixed_crystal
+                
+    #     except Exception as e:
+    #         raise RuntimeError(f"Error in prepare_ligands: {e}") from e
+        
     def prepare_ligands(self, mode: Literal["Dock", "Minimize"]) -> Tuple[Path, Path]:
         """
-        Prepare ligands for docking or minimization.
+        Prepare ligands for docking or minimization using Meeko fixer.
 
         Args:
             mode: Mode of operation, either "Dock" or "Minimize"
@@ -246,12 +379,12 @@ class Pymol_Docking:
         try:
             if mode == "Dock":
                 if self.input_mode == "SDF":
-                    logger.info("Preparing ligands from SDF")
+                    logger.info("Preparing ligands from SDF using Meeko")
                     fixed_crystal = self.crystal_sdf.resolve()
-                    fixed_ligands = self.cdpk_fixer(self.ligands_sdf, mode)
+                    fixed_ligands = self.meeko_fixer(self.ligands_sdf, mode)
                 
                 elif self.input_mode == "SMILES":
-                    logger.info("Preparing ligands from SMILES")
+                    logger.info("Preparing ligands from SMILES using Meeko")
                     TMP_SMILES_SDF = Path(gettempdir()) / "TMP_SMILES.sdf"
                     mol = dm.to_mol(self.ligands_smiles, sanitize=True, kekulize=True)
                     if mol is None:
@@ -261,7 +394,7 @@ class Pymol_Docking:
                     dm.to_sdf(mol, TMP_SMILES_SDF)
                     
                     fixed_crystal = self.crystal_sdf.resolve()
-                    fixed_ligands = self.cdpk_fixer(TMP_SMILES_SDF, mode)
+                    fixed_ligands = self.meeko_fixer(TMP_SMILES_SDF, mode)
                     
                 return _rdkit_addhs(fixed_ligands), fixed_crystal
                 
@@ -269,14 +402,14 @@ class Pymol_Docking:
                 if self.input_mode != "SDF":
                     raise ValueError("Minimization only works with SDF input")
                     
-                logger.info("Preparing ligands for minimization")
+                logger.info("Preparing ligands for minimization using Meeko")
                 fixed_crystal = self.crystal_sdf.resolve()
-                fixed_ligands = self.cdpk_fixer(self.ligands_sdf, mode)
+                fixed_ligands = self.meeko_fixer(self.ligands_sdf, mode)
                 
                 return _rdkit_addhs(fixed_ligands), fixed_crystal
                 
         except Exception as e:
-            raise RuntimeError(f"Error in prepare_ligands: {e}") from e
+            raise RuntimeError(f"Error in prepare_ligands (Meeko): {e}") from e
         
     @staticmethod
     def pose_buster_processer(mol_pred: Path, mol_crystal: Path, mol_prot: Path) -> Tuple[Path, float]:

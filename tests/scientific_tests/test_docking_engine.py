@@ -175,9 +175,10 @@ class TestPymolDocking:
                 mode, f"test_{mode.lower()}"
             )
             
-            assert smina_output is not None
-            assert protein_prep is not None
-            assert log_path is not None
+            assert smina_output is not None, f"Smina output path: {smina_output}"
+            assert protein_prep is not None, f"Protein prep path: {protein_prep}"
+            assert log_path is not None, f"Log path: {log_path}"
+            
             assert smina_output.exists()
             assert protein_prep.exists()
             assert log_path.exists()

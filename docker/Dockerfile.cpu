@@ -6,6 +6,7 @@ RUN apt-get update && apt-get install -y \
     libgl1-mesa-glx \
     libglu1-mesa \
     libxrender1 \
+    git \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 USER mambauser
@@ -42,6 +43,9 @@ RUN micromamba clean --all --yes && \
 
 # Set working directory for your project
 WORKDIR /app
+
+RUN clone git@github.com:forlilab/scrubber.git
+RUN cd scrubber && micromamba pip install -e .
 
 # Create the source directory
 RUN mkdir -p /app/pymol_fitter_src
