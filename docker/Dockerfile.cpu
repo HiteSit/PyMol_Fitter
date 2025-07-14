@@ -44,8 +44,9 @@ RUN micromamba clean --all --yes && \
 # Set working directory for your project
 WORKDIR /app
 
-RUN clone git@github.com:forlilab/scrubber.git
-RUN cd scrubber && micromamba pip install -e .
+RUN git clone https://github.com/forlilab/molscrub.git && \
+    cd molscrub && \
+    pip install -e .
 
 # Create the source directory
 RUN mkdir -p /app/pymol_fitter_src

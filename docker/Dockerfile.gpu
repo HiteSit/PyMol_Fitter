@@ -7,6 +7,7 @@ RUN apt-get update && apt-get install -y \
     libglu1-mesa \
     libxrender1 \
     git \
+    wget \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 USER mambauser
@@ -44,11 +45,21 @@ RUN micromamba clean --all --yes && \
 # Set working directory for your project
 WORKDIR /app
 
-RUN git clone git@github.com:forlilab/scrubber.git
-RUN cd scrubber && micromamba pip install -e .
+RUN git clone https://github.com/forlilab/molscrub.git && \
+    cd molscrub && \
+    pip install -e .
 
 # Create the source directory
 RUN mkdir -p /app/pymol_fitter_src
+
+# Install Autodock GPU
+RUN mkdir -p /app/tools && \
+    cd /app/tools && \
+    wget -O adgpu https://github.com/ccsb-scripps/AutoDock-GPU/releases/download/v1.6/adgpu-v1.6_linux_x64_cuda12_128wi && \
+    chmod +x adgpu
+
+# Add tools directory to PATH
+ENV PATH="/app/tools:$PATH"
 
 # Copy the server computational code
 COPY --chown=mambauser:mambauser ../pymol_fitter_server/pymol_fitter_src/*.py /app/pymol_fitter_src/
